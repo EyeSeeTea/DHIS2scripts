@@ -1,0 +1,287 @@
+<!-- // Written by EpiTech Consultants
+// 2018-02-04
+// accounts@epitechconsultants.org
+// aaron@epitechconsultants.org
+// Functions below the main script -->
+<style>
+div.count,div.report-val, div.num, div.sd {
+  text-align: right
+}
+tr.top-row {
+  border-top: medium solid grey
+}
+table
+{
+    font:15px Verdana;
+    width:100%;
+}
+report-body.table, report-info.table{
+  margin:10px 0;
+  padding:2px 4px;
+}
+report-body.table {
+  border:solid 1px #333;
+
+}
+report-body.td {
+  width: 25%
+}
+table.th {
+    font-weight:bold;
+}
+
+@media print {
+
+   /* All your print styles go here */
+
+   .hide-for-print { display: none !important; }
+
+}
+
+</style>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+<div class='container'>
+  <div id='report' class='panel panel-primary' style="padding: 1%">
+    <div id='reportHead' class='panel-head'>
+      <div id='subtitles'>
+        <table id='report-info' class='report-info'>
+          <tr>
+            <th>
+              <h1 id='title'><b>Mortality by Injury Severity</b></h1>
+            </th>
+          </tr>
+        </table>
+        <table id='report-sub-info' class='report-info'>
+          <tr>
+            <td>Organisation Unit:</td>
+            <td><div id='organisationUnit'></div></td>
+            <td><a id='download' class='btn btn-sm hide-for-print' onclick="exportTableToCSV('ISS Mortality by Injury Severity.csv')" target='_blank'>Export to CSV</a></td>
+          </tr>
+          <tr>
+            <td>Report Quarter:</td>
+            <td><div id='quarter'></div></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Generated on:</td><td><div id='genDate'></div></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div id="showData" class='panel-body'>
+
+      <table id='ISS' class= 'table-condensed table-bordered table-striped report-body'>
+        <tbody>
+          <tr><th>Scoring System</th><th>Severity</th><th>Mortality</th><th>Total</th></tr>
+
+          <tr class='top-row'>
+            <td>GAP <a href='' id='GAP-link' class='hide-for-print' target='_blank'>(more detail)</a></td>
+            <td>Mild (19 - 24)</td>
+            <td><span id="CXztMZ8YITe" class="report-val count"></span> <span id="wJqoaRgIMEx" class="report-val pct"></span></td>
+            <td><span id="ifhfN6jVqnL" class="report-val count"></span> <span id="GY45cFfog9C" class="report-val pct"></span></td>
+          </tr>
+          <tr>
+            <td></td>
+            <td>Moderate (11 - 18)</td>
+            <td><span id="UXudQkcNBTQ" class="report-val count"></span> <span id="dLKkHkflqjn" class="report-val pct"></span></td>
+            <td><span id="dj04Q0BKC4h" class="report-val count"></span> <span id="kLhPWkB8IVb" class="report-val pct"></span></td>
+          </tr>
+          <tr>
+            <td></td>
+            <td>Severe (3 - 10)</td>
+            <td><span id="bqRGDekCMwJ" class="report-val count"></span> <span id="Oly4RuoeObP" class="report-val pct"></span></td>
+            <td><span id="S0hvVe1ltN3" class="report-val count"></span> <span id="yn29mBLFrQw" class="report-val pct"></span></td>
+          </tr>
+          <tr class='top-row'>
+            <td>MGAP <a href='' id='MGAP-link' class='hide-for-print' target='_blank'>(more detail)</a></td>
+            <td>Mild (23 - 29)</td>
+            <td><span id="J55EYqSGUUd" class="report-val count"></span> <span id="yAh6ze4weX4" class="report-val pct"></span></td>
+            <td><span id="ijkRJaY3vbQ" class="report-val count"></span> <span id="lp9toAwTTQy" class="report-val pct"></span></td>
+          </tr>
+          <tr>
+            <td></td>
+            <td>Moderate (18 - 22)</td>
+            <td><span id="qfznTY9NrGr" class="report-val count"></span> <span id="BOofAl1RxXR" class="report-val pct"></span></td>
+            <td><span id="AJmYCESNHjJ" class="report-val count"></span> <span id="riP9F8w2M0l" class="report-val pct"></span></td>
+          </tr>
+          <tr>
+            <td></td>
+            <td>Severe (3 - 17)</td>
+            <td><span id="G1zu0sFrhd6" class="report-val count"></span> <span id="hCGCzfKuSCf" class="report-val pct"></span></td>
+            <td><span id="ZGeWYiOCJbR" class="report-val count"></span> <span id="WId0hkbOHyS" class="report-val pct"></span></td>
+          </tr>
+          <tr class='top-row'>
+            <td>KTS <a href='' id="KTS-link" class='hide-for-print' target='_blank'>(more detail)</a></td>
+            <td>Mild (14 - 16)</td>
+            <td><span id="Lu4AHh5Tjop" class="report-val count"></span> <span id="qWFZytQp00x" class="report-val pct"></span></td>
+            <td><span id="H43AUqcQlNW" class="report-val count"></span> <span id="cuyDHtpY01f" class="report-val pct"></span></td>
+          </tr>
+          <tr>
+            <td></td>
+            <td>Moderate (18 - 22)</td>
+            <td><span id="dbf0LGkivQi" class="report-val count"></span> <span id="AZqP8yk0WsL" class="report-val pct"></span></td>
+            <td><span id="WM14AL2Nxhs" class="report-val count"></span> <span id="CzBByKZ8yOB" class="report-val pct"></span></td>
+          </tr>
+          <tr>
+            <td></td>
+            <td>Severe (<11)</td>
+            <td><span id="gFFQaq2nGDf" class="report-val count"></span> <span id="HWwETg9pO5u" class="report-val pct"></span></td>
+            <td><span id="bnXLQjp00ot" class="report-val count"></span> <span id="KgbEW2WHhvW" class="report-val pct"></span></td>
+          </tr>
+          <tr class='top-row'>
+            <td>RTS <a href='' id='RTS-link' class='hide-for-print' target='_blank'>(more detail)</a></td>
+            <td>Mild (11 - 12)</td>
+            <td><span id="wECByM9tvla" class="report-val count"></span> <span id="fleaaDJRmsf" class="report-val pct"></span></td>
+            <td><span id="wTLIdJpKJT4" class="report-val count"></span> <span id="omp4Xo3v5I3" class="report-val pct"></span></td>
+          </tr>
+          <tr>
+            <td></td>
+            <td>Moderate (4 - 10)</td>
+            <td><span id="MyPshiP1PqK" class="report-val count"></span> <span id="B9TFE60mvjH" class="report-val pct"></span></td>
+            <td><span id="FIz79ozpa2N" class="report-val count"></span> <span id="EnRWHiySVoF" class="report-val pct"></span></td>
+          </tr>
+          <tr>
+            <td></td>
+            <td>Severe (<=3)</td>
+            <td><span id="HQNdHcMvjY3" class="report-val count"></span> <span id="iDlen87lXZP" class="report-val pct"></span></td>
+            <td><span id="q8JNcn1BZjL" class="report-val count"></span> <span id="JwAKOcnBHe0" class="report-val pct"></span></td>
+
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <div>
+        *Percentage values are displayed as the percent of total registry cases during period.
+      </div>
+      <div>References:</div>
+      <div>
+        <a href='http://www.jaypeejournals.com/eJournals/ShowText.aspx?ID=12905&Type=FREE&TYP=TOP&IN=~/eJournals/images/JPLOGO.gif&IID=1004&isPDF=YES' target='_blank' alt='GAP Definition'>GAP</a>,
+        <a href='http://www.jaypeejournals.com/eJournals/ShowText.aspx?ID=12905&Type=FREE&TYP=TOP&IN=~/eJournals/images/JPLOGO.gif&IID=1004&isPDF=YES' target='_blank' alt='MGAP Definition'>MGAP</a>,
+        <a href='https://www.researchgate.net/publication/27799668_Kampala_Trauma_Score_KTS_is_it_a_new_triage_tool' target='_blank' alt='KTS Definition'>KTS</a>,
+        <a href='http://www.jaypeejournals.com/eJournals/ShowText.aspx?ID=12905&Type=FREE&TYP=TOP&IN=~/eJournals/images/JPLOGO.gif&IID=1004&isPDF=YES' target='_blank' alt='RTS Definition'>RTS</a>
+      </div>
+
+  </div>
+
+  </div>
+</div>
+
+<script>
+$(document).ready(function() {
+  var orgUnit = dhis2.report.organisationUnit
+  var period = dhis2.report.periods[0]
+
+  document.getElementById('organisationUnit').innerText = orgUnit.name
+  document.getElementById('quarter').innerText = period;
+  document.getElementById('genDate').innerText = Date();
+
+  var ind_groups = ['aLnj7rzU5FN', 'Aa7ugyQG6aP', 'JHUS26aGMJl', 'mysAzNWLfMY', 'Mhcgr7i63zo', 'TErLik6eY2F', 'WJf6GqaJJ46', 'NPDeEDmOURG']
+  var uri = '../api/26/analytics.json?'
+  var pd = '&dimension=pe:'+period
+  var ou = '&filter=ou:'+ orgUnit.id
+  var extra = '&skipMeta=true&includeNumDen=false'
+
+  links = {'GAP' : 'OtMEFmMYx5j',
+           'MGAP' : 'LZLrKtbDJru',
+           'KTS' : 'aHbbyNwM0QF',
+           'RTS' : 'WGYf8DtVlab'}
+
+  for (var link in links) {
+    a = document.getElementById(link+"-link")
+    a.setAttribute('href', '../dhis-web-pivot/?id=' + links[link])
+  }
+
+  // lookup each indicator group and place the data into the cells
+  $.each(ind_groups, function(dim) {
+    var uri_subset = uri + "dimension=dx:IN_GROUP-" + ind_groups[dim] + pd + ou + extra
+    $.get(uri_subset, function(x) {
+      console.log('Downloading data...')
+      $.each(x.rows, function(j) {
+        cell = document.getElementById(x.rows[j][0])
+        if (cell != null) {
+          txt = x.rows[j][2]
+          if (cell.classList.contains('count')) {
+            txt = parseInt(txt)
+          }
+          if ($(cell).hasClass('pct')) {
+            txt = "("+ txt +"%)"
+          }
+          cell.innerText = txt
+        }
+      })
+    })
+  }).done(function() {
+    empties = document.getElementsByClassName("report-val")
+    console.log(empties)
+    console.log('Filling any div/0 issues or missing data with 0')
+    $.each(empties, function(j) {
+      if (empties[j].innerText == '') {
+          empties[j].innerText = '0'
+      }
+    })
+  })
+
+
+})
+// for (i = 0; i < obj.rows.length; i++) {
+//     j = document.getElementById(obj.rows[i][0])
+// 	j.innerText = obj.rows[i][2]
+//
+// }
+
+
+
+
+function downloadCSV(csv, filename) {
+    var cvFile;
+    var downloadLink
+
+    // CSV file
+    csvFile = new Blob([csv], {type: "text/csv"});
+
+    // Download link
+    downloadLink = document.createElement("a");
+
+    // File name
+    downloadLink.download = filename;
+
+    // Create a link to the file
+    downloadLink.href = window.URL.createObjectURL(csvFile);
+
+    // Hide download link
+    downloadLink.style.display = "none";
+
+    // Add the link to DOM
+    document.body.appendChild(downloadLink);
+
+    // Click download link
+    downloadLink.click();
+}
+
+function exportTableToCSV(filename) {
+    var csv = [];
+    var rows = document.querySelectorAll("table tr");
+
+    for (var i = 0; i < rows.length; i++) {
+        var row = [], cols = rows[i].querySelectorAll("td, th");
+
+        for (var j = 0; j < cols.length; j++)
+          if (cols[j].innerHTML.indexOf('btn') == -1) {
+            row.push(cols[j].innerText);
+
+          }
+
+        csv.push(row.join(","));
+    }
+
+    // Download CSV file
+    downloadCSV(csv.join("\n"), filename);
+}
+
+
+</script>
+

@@ -1,0 +1,1533 @@
+<!-- // Written by EpiTech Consultants
+// 2018-03-15
+// accounts@epitechconsultants.org
+// aaron@epitechconsultants.org
+// Body below the main script -->
+<style>
+div.count,div.report-val, div.num, div.sd {
+  text-align: right;
+  /* width: 65px */
+}
+tr.top-row {
+  border-top: medium solid grey
+}
+table
+{
+  font:15px Verdana;
+  width:100%;
+}
+
+report-body.table, report-info.table{
+  margin:10px 0;
+  padding:2px 4px;
+}
+report-body.table {
+  border:solid 1px #333;
+
+}
+report-body.td {
+  width: 25%
+}
+table.th {
+  font-weight:bold;
+}
+@media print {
+  /* All your print styles go here */
+  .hide-for-print { display: none !important; }
+}
+</style>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+<script>
+var orgUnit = dhis2.report.organisationUnit
+var period = dhis2.report.periods[0]
+// Update the headers for the report
+// define the indicator groups to get. order doesn't matter now
+var ind_groups = ['YNdatZ6GQmn', 'T1qWJMe9h1w', 'zX0L6tzJUYU', 'r57O0fonc2w', 'CNyk9b3QPJv', 'S850rdjnP5y', 'Vo5lRrgSlRg', 'f9ysMDTrLfp', 'IR5tVEnAz9L', 'Cd475p8sAl8']
+
+$(document).ready( function() {
+
+  // Get the data and populate
+
+  var uri = '../api/26/analytics.json?'
+  var pd = '&dimension=pe:'+period
+  var ou = '&filter=ou:'+ orgUnit.id
+  var extra = '&skipMeta=true&includeNumDen=true'
+  // lookup each indicator group and place the data into the cells
+  $.each(ind_groups, function(dim) {
+    console.log("Getting Indciator Group: " + dim)
+    var uri_subset = uri + "dimension=dx:IN_GROUP-" + ind_groups[dim] + pd + ou + extra
+    $.get(uri_subset, function(x) {
+      // hit the analytics endpoint for that indicator group
+      // then run through each row and populate the values we want
+      // we use includeNumDen=true since we want a count value AND the percent
+      // this way it comes in one payload instead of hitting two different
+      // queries
+      $.each(x.rows, function(j) {
+        // for each of the rows in the resulting analytics data response
+        // fill in the value (percent) and the numerator (the count)
+        // into the appropriately tagged spans in the body below
+        suffix = {'-val':2, '-num':3}
+        for (var s in suffix) {
+          cell = document.getElementById(x.rows[j][0]+s)
+          if (cell != null) {
+            txt = x.rows[j][suffix[s]]
+            // some number dressing based on how we want to display it
+            if (cell.classList.contains('count')) {
+              txt = parseInt(txt)
+            }
+            if ($(cell).hasClass('sd')) {
+              txt = "(SD "+ txt +")"
+            }
+            if ($(cell).hasClass('pct')) {
+              txt = "("+ txt +"%)"
+            }
+            cell.innerText = txt
+          }
+        }
+      })
+    })
+  })
+  var ou_name = document.getElementById('organisationUnit')
+  var qtr = document.getElementById('quarter')
+  var gen_dt = document.getElementById('genDate')
+
+  // Set some properties on the header of the table
+  ou_name.innerText = orgUnit.name
+  qtr.innerText = period;
+  gen_dt.innerText = Date();
+
+})
+
+
+
+
+
+function sort_col(col, order){
+  for (i in ind_groups) {
+    sort_section(ind_groups[i], col, order)
+  }
+  th = document.getElementById('registry-info').getElementsByTagName('th')[col]
+  th.querySelector('a').onclick = function(){sort_col(col, order*-1)}
+}
+
+function removed_fixed(rows){
+  // tbody =>  remove rows with 'sort-fixed' from a table
+  // return an array of removed elements
+  var x = []
+  for (i =rows.length - 1; i>0;i--){
+    if (rows[i].classList.contains('sort-fixed')) {
+        x.push(rows[i])
+        rows[i].remove()
+    }
+  }
+  return x.reverse() // since we started from the back
+}
+
+function sort_section(tbody_id, col, order = -1){
+  // tbody_id => the tbody tag with an id matching an indicator group
+  // col => the column to sort on, 0 indexed
+  // order => -1 for descending, 1 for ascending
+  // text must be inside a span for this to work
+  // any tr with a class attribute of 'sort-fixed' will be pulled and
+  // stuck at the bottom regardless of value.
+
+  var tbody = document.getElementById(tbody_id)
+  if (tbody) {
+    var first = tbody.querySelector('td').innerText
+    console.log('Sorting section: '+ first)
+    var first_text = first.innerText
+    tbody.querySelector('td').innerText = ''
+    tbody.querySelector('tr').removeAttribute('class', 'top-row')
+
+    var fixed = removed_fixed(tbody.getElementsByTagName('tr'))
+
+    $(tbody).find('tr').sort(function (a, b) {
+      var tda = parse_val(a.cells[col].querySelector('span'))
+      var tdb = parse_val(b.cells[col].querySelector('span'));
+          // if a < b return 1
+      return tda < tdb ? -1 * order
+          // else if a > b return -1
+            : tda > tdb ? 1 * order
+           // else they are equal - return 0
+             : 0;
+
+     }).appendTo($(tbody));
+    $(tbody).append(fixed) // add the fixed rows back in
+    tbody.querySelector('td').innerText = first
+    // set the formatting on the top row again
+    tbody.querySelector('tr').setAttribute('class', 'top-row')
+  }
+
+
+}
+
+function parse_val(val){
+  if (isNotNull(val)) {
+    if (val.classList.contains('count')) {
+      var val = parseInt(val.innerText)
+    }
+    else {
+      var val = val.innerText
+    }
+  }
+  return val
+}
+
+function downloadCSV(csv, filename) {
+  var csvFile;
+  var downloadLink;
+  // CSV file
+  csvFile = new Blob([csv], {type: "text/csv"});
+  // Download link
+  downloadLink = document.createElement("a");
+  // File name
+  downloadLink.download = filename;
+  // Create a link to the file
+  downloadLink.href = window.URL.createObjectURL(csvFile);
+  // Hide download link
+  downloadLink.style.display = "none";
+  // Add the link to DOM
+  document.body.appendChild(downloadLink);
+  // Click download link
+  downloadLink.click();
+}
+
+function exportTableToCSV(filename) {
+  var csv = [];
+  var rows = document.querySelectorAll("table tr");
+  for (var i = 0; i < rows.length; i++) {
+    var row = [], cols = rows[i].querySelectorAll("td, th");
+
+    for (var j = 0; j < cols.length; j++) {
+      if (cols[j].innerHTML.indexOf('btn') == -1) {
+        row.push('\"' + cols[j].innerText.replace(/[\n\r]/g, ' ').trim() + '\"' )
+      }
+    }
+    csv.push(row.join(","));
+  }
+  // Download CSV file
+  downloadCSV(csv.join("\n"), filename);
+}
+
+
+</script>
+<div class='container'>
+  <div id='report' class='panel panel-primary' style="padding: 1%">
+    <div id='reportHead' class='panel-head'>
+      <div id='subtitles'>
+        <table id='report-info' class='report-info'>
+          <tr>
+            <th>
+              <h1 id='title'><b>Patient Characteristics</b></h1>
+            </th>
+          </tr>
+        </table>
+        <table id='report-sub-info' class='report-info'>
+          <tr>
+            <td>Organisation Unit:</td>
+            <td><div id='organisationUnit'></div></td>
+            <td><a id='download' class='btn btn-sm hide-for-print' onclick="exportTableToCSV('Trauma Registry Information.csv')" target='_blank'>Export to CSV</a></td>
+          </tr>
+          <tr>
+            <td>Report Quarter:</td>
+            <td><div id='quarter'></div></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Generated on:</td>
+            <td><div id='genDate'></div></td>
+            <td></td>
+
+
+          </tr>
+        </table>
+      </div>
+    </div>
+    <br><br>
+    <div class='hide-for-print'>Click on a column name to change the sort order</div>
+    <div id="showData" class='panel-body'>
+      <table id='registry-info' class='table-condensed table-bordered table-striped table-hover report-info'>
+        <thead>
+          <tr><th style="width:45px">Group</th>
+            <th style="width: 45px"><a onclick='sort_col(1,1)'>Sub-Group</a></th>
+            <th><a onclick='sort_col(2,1)'>< 1 yr</a></th>
+            <th><a onclick='sort_col(3,1)'>1 - 4 yr</a></th>
+            <th><a onclick='sort_col(4,1)'>5 - 9 yr</a></th>
+            <th><a onclick='sort_col(5,1)'>10 - 14 yr</a></th>
+            <th><a onclick='sort_col(6,1)'>15 - 19 yr</a></th>
+            <th><a onclick='sort_col(7,1)'>20 - 40 yr</a></th>
+            <th><a onclick='sort_col(8,1)'>40 - 60 yr</a></th>
+            <th><a onclick='sort_col(9,1)'>60 - 80 yr</a></th>
+            <th><a onclick='sort_col(10,1)'>80+ yr</a></th>
+            <th><a onclick='sort_col(11,1)'>Total</a></th>
+          </tr>
+        </thead>
+          <tbody id="Vo5lRrgSlRg">
+          <tr class="top-row">
+            <td><span class='text'>Sex</span></td>
+            <td><span class='text'>Female</span></td>
+            <td><div class='report-val'><span id="JkpNBjTauhE-num" class="report-val count"> 0 </span> <span id="JkpNBjTauhE-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="kdwn5qZiWHZ-num" class="report-val count"> 0 </span> <span id="kdwn5qZiWHZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Yr0CZoWOJdb-num" class="report-val count"> 0 </span> <span id="Yr0CZoWOJdb-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Qp3kSGmjsEV-num" class="report-val count"> 0 </span> <span id="Qp3kSGmjsEV-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="aGTI9wY2wXm-num" class="report-val count"> 0 </span> <span id="aGTI9wY2wXm-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="rzigFupx2gO-num" class="report-val count"> 0 </span> <span id="rzigFupx2gO-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="bIa4YnrMntG-num" class="report-val count"> 0 </span> <span id="bIa4YnrMntG-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tzYu7vNfqPG-num" class="report-val count"> 0 </span> <span id="tzYu7vNfqPG-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tmZXwiDjp9v-num" class="report-val count"> 0 </span> <span id="tmZXwiDjp9v-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="fjfRz7Fftge-num" class="report-val count"> 0 </span> <span id="fjfRz7Fftge-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Male</span></td>
+            <td><div class='report-val'><span id="yVAXEsSEjT3-num" class="report-val count"> 0 </span> <span id="yVAXEsSEjT3-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="BlI4kyzDq57-num" class="report-val count"> 0 </span> <span id="BlI4kyzDq57-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="IoLCeNW1OyM-num" class="report-val count"> 0 </span> <span id="IoLCeNW1OyM-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="NRbGca7ltoa-num" class="report-val count"> 0 </span> <span id="NRbGca7ltoa-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="CtfdKWiUOou-num" class="report-val count"> 0 </span> <span id="CtfdKWiUOou-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="twiAYiXltiE-num" class="report-val count"> 0 </span> <span id="twiAYiXltiE-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="U9gOc5ZDwOZ-num" class="report-val count"> 0 </span> <span id="U9gOc5ZDwOZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="NrpTBIlrmUi-num" class="report-val count"> 0 </span> <span id="NrpTBIlrmUi-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="apdEJHRG2az-num" class="report-val count"> 0 </span> <span id="apdEJHRG2az-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="x4QfWlyQoM7-num" class="report-val count"> 0 </span> <span id="x4QfWlyQoM7-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Transgender to Female</span></td>
+            <td><div class='report-val'><span id="EwFNMB65yWR-num" class="report-val count"> 0 </span> <span id="EwFNMB65yWR-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="qfHJzTSaXs8-num" class="report-val count"> 0 </span> <span id="qfHJzTSaXs8-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="jRtIOE1od1A-num" class="report-val count"> 0 </span> <span id="jRtIOE1od1A-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="XtjxKk7xrVa-num" class="report-val count"> 0 </span> <span id="XtjxKk7xrVa-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="LVI5JbReY9X-num" class="report-val count"> 0 </span> <span id="LVI5JbReY9X-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Qmq9908spg0-num" class="report-val count"> 0 </span> <span id="Qmq9908spg0-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="qHrG1I2lOZu-num" class="report-val count"> 0 </span> <span id="qHrG1I2lOZu-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="jvrls6s8BAd-num" class="report-val count"> 0 </span> <span id="jvrls6s8BAd-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="D2mz5iIqHT8-num" class="report-val count"> 0 </span> <span id="D2mz5iIqHT8-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="exu15giLufG-num" class="report-val count"> 0 </span> <span id="exu15giLufG-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Transgender to Male</span></td>
+            <td><div class='report-val'><span id="XDoSmll9z1Q-num" class="report-val count"> 0 </span> <span id="XDoSmll9z1Q-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="E43lBsCXIcg-num" class="report-val count"> 0 </span> <span id="E43lBsCXIcg-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="CNpFH9ZvdVe-num" class="report-val count"> 0 </span> <span id="CNpFH9ZvdVe-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="rHfrJ1J0taU-num" class="report-val count"> 0 </span> <span id="rHfrJ1J0taU-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="o2E5TTWREFB-num" class="report-val count"> 0 </span> <span id="o2E5TTWREFB-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="N26ykKUSN4p-num" class="report-val count"> 0 </span> <span id="N26ykKUSN4p-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ZnxNAj7enAz-num" class="report-val count"> 0 </span> <span id="ZnxNAj7enAz-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="oE3VzwdRAav-num" class="report-val count"> 0 </span> <span id="oE3VzwdRAav-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="JrefPshsvQp-num" class="report-val count"> 0 </span> <span id="JrefPshsvQp-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="MP2bnHOLAlZ-num" class="report-val count"> 0 </span> <span id="MP2bnHOLAlZ-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr class='sort-fixed'>
+            <td></td>
+            <td><span class='text'>Unknown</span></td>
+            <td><div class='report-val'><span id="wfRczL77MQQ-num" class="report-val count"> 0 </span> <span id="wfRczL77MQQ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Ud1H4WUXYJ0-num" class="report-val count"> 0 </span> <span id="Ud1H4WUXYJ0-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="qViwbqB1H1s-num" class="report-val count"> 0 </span> <span id="qViwbqB1H1s-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="fDnHZqqYxrM-num" class="report-val count"> 0 </span> <span id="fDnHZqqYxrM-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Ld11D2hmsu2-num" class="report-val count"> 0 </span> <span id="Ld11D2hmsu2-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dmbdrEkrZHt-num" class="report-val count"> 0 </span> <span id="dmbdrEkrZHt-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="GTpwgj6Aths-num" class="report-val count"> 0 </span> <span id="GTpwgj6Aths-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="iGx2PnEiivb-num" class="report-val count"> 0 </span> <span id="iGx2PnEiivb-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="LRvJBFMt6N6-num" class="report-val count"> 0 </span> <span id="LRvJBFMt6N6-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="SzD6LNoDotc-num" class="report-val count"> 0 </span> <span id="SzD6LNoDotc-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+        </tbody>
+        <tbody>
+          <tr class='top-row'>
+            <td><span class='text'>Major Medical Comorbidities</span></td>
+            <td>Mean (Standard Deviation)</td>
+            <td><div class='report-val'><span id="XbOPHvVRVPY-val" class="report-val count"> 0 </span> <span id="RGDJYvKIpj9-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="o1HbvDPciVG-val" class="report-val count"> 0 </span> <span id="eDDVibOmKcR-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="whj5nv1Pkzc-val" class="report-val count"> 0 </span> <span id="YfCjMT19Msw-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="Lvpc8jDeMIL-val" class="report-val count"> 0 </span> <span id="n3CaXxu6D1D-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="o4xPpoL36v3-val" class="report-val count"> 0 </span> <span id="ZbeQNa8d2W2-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="MGMRf4Q53L4-val" class="report-val count"> 0 </span> <span id="d9muxMIeWNB-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="jQ1Kvdj9x5G-val" class="report-val count"> 0 </span> <span id="Vq2mrycrmgs-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="eUDBxLHLgm2-val" class="report-val count"> 0 </span> <span id="rJrsmOUknWH-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="ZPdyW26UbKW-val" class="report-val count"> 0 </span> <span id="Iz1LZRIs6qO-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="FGLD8ngV8TW-val" class="report-val count"> 0 </span> <span id="XotyqvjNfoH-val" class="report-val sd"> (SD 0) </span></div></td>
+          </tr>
+        </tbody>
+        <tbody id="r57O0fonc2w">
+          <tr class='top-row'><td><span class='text'>Injury Mechanism</span></td>
+            <td><span class='text'>Animal Bite</span></td>
+            <td><div class='report-val'><span id="v2sW7BJgKVM-num" class="report-val count"> 0 </span> <span id="v2sW7BJgKVM-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Vp6NqZ9ODOg-num" class="report-val count"> 0 </span> <span id="Vp6NqZ9ODOg-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="aSyWkPctljk-num" class="report-val count"> 0 </span> <span id="aSyWkPctljk-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="aqGOGowTbpX-num" class="report-val count"> 0 </span> <span id="aqGOGowTbpX-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="PlY8d0OQMHl-num" class="report-val count"> 0 </span> <span id="PlY8d0OQMHl-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="JJpeV1aBykE-num" class="report-val count"> 0 </span> <span id="JJpeV1aBykE-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="KQeeAKLBdJL-num" class="report-val count"> 0 </span> <span id="KQeeAKLBdJL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="F5VAapHX5eP-num" class="report-val count"> 0 </span> <span id="F5VAapHX5eP-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dHGbbOhIMh3-num" class="report-val count"> 0 </span> <span id="dHGbbOhIMh3-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="jAkUeGisOPt-num" class="report-val count"> 0 </span> <span id="jAkUeGisOPt-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Burns</span></td>
+            <td><div class='report-val'><span id="xU1mmgkLOmF-num" class="report-val count"> 0 </span> <span id="xU1mmgkLOmF-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="chktLyY2PpH-num" class="report-val count"> 0 </span> <span id="chktLyY2PpH-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="AHe7PXPfPAY-num" class="report-val count"> 0 </span> <span id="AHe7PXPfPAY-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="sVWpzdWtKOL-num" class="report-val count"> 0 </span> <span id="sVWpzdWtKOL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="YqiRaraGexv-num" class="report-val count"> 0 </span> <span id="YqiRaraGexv-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Q5VkaXYdopK-num" class="report-val count"> 0 </span> <span id="Q5VkaXYdopK-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xY0c2Jphvk0-num" class="report-val count"> 0 </span> <span id="xY0c2Jphvk0-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="nO1WknQ1O4h-num" class="report-val count"> 0 </span> <span id="nO1WknQ1O4h-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="JECloYjijlI-num" class="report-val count"> 0 </span> <span id="JECloYjijlI-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="m3huAKg69zJ-num" class="report-val count"> 0 </span> <span id="m3huAKg69zJ-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Drowning submersion</span></td>
+            <td><div class='report-val'><span id="z4R3j2ktyUM-num" class="report-val count"> 0 </span> <span id="z4R3j2ktyUM-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tDxz9Bcb8t6-num" class="report-val count"> 0 </span> <span id="tDxz9Bcb8t6-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="XfsuOr44ayL-num" class="report-val count"> 0 </span> <span id="XfsuOr44ayL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="mvFWhL16XP9-num" class="report-val count"> 0 </span> <span id="mvFWhL16XP9-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="YNFQXdhalzi-num" class="report-val count"> 0 </span> <span id="YNFQXdhalzi-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="zSeDxvIyyTC-num" class="report-val count"> 0 </span> <span id="zSeDxvIyyTC-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="wvRtAsvQgUA-num" class="report-val count"> 0 </span> <span id="wvRtAsvQgUA-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="INULQ8dTvr0-num" class="report-val count"> 0 </span> <span id="INULQ8dTvr0-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="uwLCDQ3ALxW-num" class="report-val count"> 0 </span> <span id="uwLCDQ3ALxW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="jKUhmIt4NHe-num" class="report-val count"> 0 </span> <span id="jKUhmIt4NHe-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Electric lightning injury</span></td>
+            <td><div class='report-val'><span id="oEmTakbBg4j-num" class="report-val count"> 0 </span> <span id="oEmTakbBg4j-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="hbmS9cgEnq0-num" class="report-val count"> 0 </span> <span id="hbmS9cgEnq0-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="K3kfd5cQUK7-num" class="report-val count"> 0 </span> <span id="K3kfd5cQUK7-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="a9y4ZhKuPIU-num" class="report-val count"> 0 </span> <span id="a9y4ZhKuPIU-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="g4kVUpIi4kf-num" class="report-val count"> 0 </span> <span id="g4kVUpIi4kf-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="AVE726aNr1x-num" class="report-val count"> 0 </span> <span id="AVE726aNr1x-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="s2d2e5YrRwc-num" class="report-val count"> 0 </span> <span id="s2d2e5YrRwc-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="QG8Dj2vdPor-num" class="report-val count"> 0 </span> <span id="QG8Dj2vdPor-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="BMo8vjUdBn4-num" class="report-val count"> 0 </span> <span id="BMo8vjUdBn4-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="IALA3NnDQ4X-num" class="report-val count"> 0 </span> <span id="IALA3NnDQ4X-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Explosive blast</span></td>
+            <td><div class='report-val'><span id="V7qzmqfnyIc-num" class="report-val count"> 0 </span> <span id="V7qzmqfnyIc-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="d9IXQdArMBJ-num" class="report-val count"> 0 </span> <span id="d9IXQdArMBJ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="y2OcwsEj7qK-num" class="report-val count"> 0 </span> <span id="y2OcwsEj7qK-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="d4P2qJHKjvu-num" class="report-val count"> 0 </span> <span id="d4P2qJHKjvu-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="laWlKBuLEwo-num" class="report-val count"> 0 </span> <span id="laWlKBuLEwo-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="K3kl6sa0mTU-num" class="report-val count"> 0 </span> <span id="K3kl6sa0mTU-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="GXIJgIdv09h-num" class="report-val count"> 0 </span> <span id="GXIJgIdv09h-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="hhdCm7qhOJW-num" class="report-val count"> 0 </span> <span id="hhdCm7qhOJW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="mtX6xmsYt1Y-num" class="report-val count"> 0 </span> <span id="mtX6xmsYt1Y-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="NVqL5uERL4X-num" class="report-val count"> 0 </span> <span id="NVqL5uERL4X-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Exposure to forces nature</span></td>
+            <td><div class='report-val'><span id="C1h2Lp6rHn9-num" class="report-val count"> 0 </span> <span id="C1h2Lp6rHn9-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="AWF3PdRhKVG-num" class="report-val count"> 0 </span> <span id="AWF3PdRhKVG-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ZEjuWFCLEsO-num" class="report-val count"> 0 </span> <span id="ZEjuWFCLEsO-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="BvdBzkWcX4e-num" class="report-val count"> 0 </span> <span id="BvdBzkWcX4e-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xA8bmzGr3qn-num" class="report-val count"> 0 </span> <span id="xA8bmzGr3qn-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="LE86ZyT7Qsk-num" class="report-val count"> 0 </span> <span id="LE86ZyT7Qsk-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="wEeEnnY5XzM-num" class="report-val count"> 0 </span> <span id="wEeEnnY5XzM-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="CQ2FLwBueOw-num" class="report-val count"> 0 </span> <span id="CQ2FLwBueOw-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="onxR14fGo94-num" class="report-val count"> 0 </span> <span id="onxR14fGo94-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="rs42aRsi21G-num" class="report-val count"> 0 </span> <span id="rs42aRsi21G-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Falls</span></td>
+            <td><div class='report-val'><span id="lnEuflu2gd2-num" class="report-val count"> 0 </span> <span id="lnEuflu2gd2-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Ow4iQm27idd-num" class="report-val count"> 0 </span> <span id="Ow4iQm27idd-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="djNlquh2cKO-num" class="report-val count"> 0 </span> <span id="djNlquh2cKO-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="d7CBZpOYnWN-num" class="report-val count"> 0 </span> <span id="d7CBZpOYnWN-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="E0ZUI3dadmI-num" class="report-val count"> 0 </span> <span id="E0ZUI3dadmI-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="sY7ivP6UOV4-num" class="report-val count"> 0 </span> <span id="sY7ivP6UOV4-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="CzYboZLjvEM-num" class="report-val count"> 0 </span> <span id="CzYboZLjvEM-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="HV3bOlhqKCx-num" class="report-val count"> 0 </span> <span id="HV3bOlhqKCx-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="yp82jbzPMjX-num" class="report-val count"> 0 </span> <span id="yp82jbzPMjX-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Db866uNH3wy-num" class="report-val count"> 0 </span> <span id="Db866uNH3wy-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Gun shot</span></td>
+            <td><div class='report-val'><span id="yxu0NpMkGPI-num" class="report-val count"> 0 </span> <span id="yxu0NpMkGPI-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="MckVXKSqae1-num" class="report-val count"> 0 </span> <span id="MckVXKSqae1-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="TsaQAHmyHdo-num" class="report-val count"> 0 </span> <span id="TsaQAHmyHdo-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="OpySNlxhFoR-num" class="report-val count"> 0 </span> <span id="OpySNlxhFoR-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="kGhAFGDP6tX-num" class="report-val count"> 0 </span> <span id="kGhAFGDP6tX-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="KtvlMth7i5b-num" class="report-val count"> 0 </span> <span id="KtvlMth7i5b-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xH2vlK49rZ5-num" class="report-val count"> 0 </span> <span id="xH2vlK49rZ5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="lE6r93iwHIJ-num" class="report-val count"> 0 </span> <span id="lE6r93iwHIJ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ZG1BifxqZsj-num" class="report-val count"> 0 </span> <span id="ZG1BifxqZsj-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dkIOaB8OiCB-num" class="report-val count"> 0 </span> <span id="dkIOaB8OiCB-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Hit by person or object</span></td>
+            <td><div class='report-val'><span id="qwjoEtYwZWG-num" class="report-val count"> 0 </span> <span id="qwjoEtYwZWG-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="kCW1wYrzZZ5-num" class="report-val count"> 0 </span> <span id="kCW1wYrzZZ5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="XUnOQBok8hm-num" class="report-val count"> 0 </span> <span id="XUnOQBok8hm-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="YGxtBVLL6Mn-num" class="report-val count"> 0 </span> <span id="YGxtBVLL6Mn-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dNWtpIRgrIU-num" class="report-val count"> 0 </span> <span id="dNWtpIRgrIU-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="q3tcEvD8zDl-num" class="report-val count"> 0 </span> <span id="q3tcEvD8zDl-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="F8oktTddouV-num" class="report-val count"> 0 </span> <span id="F8oktTddouV-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="W3F7Ff5oKaA-num" class="report-val count"> 0 </span> <span id="W3F7Ff5oKaA-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="MVwGGC9Hrs9-num" class="report-val count"> 0 </span> <span id="MVwGGC9Hrs9-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="SJizRJeuoNW-num" class="report-val count"> 0 </span> <span id="SJizRJeuoNW-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Poisoning toxic exposure</span></td>
+            <td><div class='report-val'><span id="WULWVobZNXR-num" class="report-val count"> 0 </span> <span id="WULWVobZNXR-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Wgk89FuGwOH-num" class="report-val count"> 0 </span> <span id="Wgk89FuGwOH-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="JPrqY5Wx8uO-num" class="report-val count"> 0 </span> <span id="JPrqY5Wx8uO-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="GMkJl21rqoe-num" class="report-val count"> 0 </span> <span id="GMkJl21rqoe-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="jQqiEaQEINw-num" class="report-val count"> 0 </span> <span id="jQqiEaQEINw-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="YXnMPOSsz2F-num" class="report-val count"> 0 </span> <span id="YXnMPOSsz2F-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="bXMczHk9YQS-num" class="report-val count"> 0 </span> <span id="bXMczHk9YQS-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="FH6EJYgPPaC-num" class="report-val count"> 0 </span> <span id="FH6EJYgPPaC-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tQBmKU3nEVI-num" class="report-val count"> 0 </span> <span id="tQBmKU3nEVI-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ze0GAWC3l6X-num" class="report-val count"> 0 </span> <span id="ze0GAWC3l6X-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Radiation exposure</span></td>
+            <td><div class='report-val'><span id="U5CbWw8TFjV-num" class="report-val count"> 0 </span> <span id="U5CbWw8TFjV-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Ib1paQ93T2a-num" class="report-val count"> 0 </span> <span id="Ib1paQ93T2a-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="NbGNqflcgZc-num" class="report-val count"> 0 </span> <span id="NbGNqflcgZc-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="FcwRHwhGIy9-num" class="report-val count"> 0 </span> <span id="FcwRHwhGIy9-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Xg0pSei9pW2-num" class="report-val count"> 0 </span> <span id="Xg0pSei9pW2-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="zr8vE4zQjKk-num" class="report-val count"> 0 </span> <span id="zr8vE4zQjKk-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Qorx5uoWvL2-num" class="report-val count"> 0 </span> <span id="Qorx5uoWvL2-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="KFNg93kfKek-num" class="report-val count"> 0 </span> <span id="KFNg93kfKek-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="kuLLMlfSyC3-num" class="report-val count"> 0 </span> <span id="kuLLMlfSyC3-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="rIWJg3hIxjz-num" class="report-val count"> 0 </span> <span id="rIWJg3hIxjz-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Road traffic incident</span></td>
+            <td><div class='report-val'><span id="L5L4j68mFbI-num" class="report-val count"> 0 </span> <span id="L5L4j68mFbI-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="mPzFQvCR9W9-num" class="report-val count"> 0 </span> <span id="mPzFQvCR9W9-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="j7Td0AsE6DV-num" class="report-val count"> 0 </span> <span id="j7Td0AsE6DV-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tFjTgyD7fmC-num" class="report-val count"> 0 </span> <span id="tFjTgyD7fmC-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Y8efOsKt5aG-num" class="report-val count"> 0 </span> <span id="Y8efOsKt5aG-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="b6A7DcrN1wR-num" class="report-val count"> 0 </span> <span id="b6A7DcrN1wR-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="mi50r6dujYz-num" class="report-val count"> 0 </span> <span id="mi50r6dujYz-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="u2vZZqya4SN-num" class="report-val count"> 0 </span> <span id="u2vZZqya4SN-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ubkRZosyaeB-num" class="report-val count"> 0 </span> <span id="ubkRZosyaeB-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="gLmvyXXBBaq-num" class="report-val count"> 0 </span> <span id="gLmvyXXBBaq-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Sexual assault</span></td>
+            <td><div class='report-val'><span id="i3UpuOZlKQO-num" class="report-val count"> 0 </span> <span id="i3UpuOZlKQO-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="DWAVMpjPU9M-num" class="report-val count"> 0 </span> <span id="DWAVMpjPU9M-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Vw0MAjv0ud2-num" class="report-val count"> 0 </span> <span id="Vw0MAjv0ud2-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="mWfX3EGav8W-num" class="report-val count"> 0 </span> <span id="mWfX3EGav8W-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="BqV3YVBlD6q-num" class="report-val count"> 0 </span> <span id="BqV3YVBlD6q-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xKBwu2cuZcE-num" class="report-val count"> 0 </span> <span id="xKBwu2cuZcE-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="EVtnjOpl4ad-num" class="report-val count"> 0 </span> <span id="EVtnjOpl4ad-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="LEhntuVyNZL-num" class="report-val count"> 0 </span> <span id="LEhntuVyNZL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="AQ83RnKLZ4u-num" class="report-val count"> 0 </span> <span id="AQ83RnKLZ4u-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="PwHwGn1s6EC-num" class="report-val count"> 0 </span> <span id="PwHwGn1s6EC-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span>Stab, cut, and all penetrating other than gunshot</span></td>
+            <td><div class='report-val'><span id="AznVRAr9ixB-num" class="report-val count"> 0 </span> <span id="AznVRAr9ixB-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xpEnQIksp22-num" class="report-val count"> 0 </span> <span id="xpEnQIksp22-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="K2QetSWOGrq-num" class="report-val count"> 0 </span> <span id="K2QetSWOGrq-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Mq8qFxd7cEp-num" class="report-val count"> 0 </span> <span id="Mq8qFxd7cEp-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="RNpergUZAW2-num" class="report-val count"> 0 </span> <span id="RNpergUZAW2-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="TubggO1TyPH-num" class="report-val count"> 0 </span> <span id="TubggO1TyPH-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Gcufmo4xJRA-num" class="report-val count"> 0 </span> <span id="Gcufmo4xJRA-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="JS3M0by0AFl-num" class="report-val count"> 0 </span> <span id="JS3M0by0AFl-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="TUCjY64iPjs-num" class="report-val count"> 0 </span> <span id="TUCjY64iPjs-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="JJ861lpDwGU-num" class="report-val count"> 0 </span> <span id="JJ861lpDwGU-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span>Suffocation, choking, hanging</span></td>
+            <td><div class='report-val'><span id="b4hjGYC2Bff-num" class="report-val count"> 0 </span> <span id="b4hjGYC2Bff-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="EUzVANtmaON-num" class="report-val count"> 0 </span> <span id="EUzVANtmaON-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="EzIJSKbcSAH-num" class="report-val count"> 0 </span> <span id="EzIJSKbcSAH-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="QV80vEfZQBZ-num" class="report-val count"> 0 </span> <span id="QV80vEfZQBZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="BmgkJIz75lr-num" class="report-val count"> 0 </span> <span id="BmgkJIz75lr-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="yclSyT4CtpC-num" class="report-val count"> 0 </span> <span id="yclSyT4CtpC-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ocxRDcJFylp-num" class="report-val count"> 0 </span> <span id="ocxRDcJFylp-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="SoKCgklC3RP-num" class="report-val count"> 0 </span> <span id="SoKCgklC3RP-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xGH16X5HIut-num" class="report-val count"> 0 </span> <span id="xGH16X5HIut-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="YUt5Fdlp0u7-num" class="report-val count"> 0 </span> <span id="YUt5Fdlp0u7-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+          <tr class='sort-fixed'>
+            <td></td>
+            <td><span class='text'>Other transport incident</span></td>
+            <td><div class='report-val'><span id="skbVqj1YOAc-num" class="report-val count"> 0 </span> <span id="skbVqj1YOAc-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="t9JhfpfpuxF-num" class="report-val count"> 0 </span> <span id="t9JhfpfpuxF-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="eMI65yBAwIO-num" class="report-val count"> 0 </span> <span id="eMI65yBAwIO-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="u5hjtlX5nVi-num" class="report-val count"> 0 </span> <span id="u5hjtlX5nVi-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="sfnqTiFgeot-num" class="report-val count"> 0 </span> <span id="sfnqTiFgeot-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="a95NoWIhXqh-num" class="report-val count"> 0 </span> <span id="a95NoWIhXqh-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="GXLn9lrPCK1-num" class="report-val count"> 0 </span> <span id="GXLn9lrPCK1-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="lAQzOF4yKal-num" class="report-val count"> 0 </span> <span id="lAQzOF4yKal-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="LJuEvT9zCKe-num" class="report-val count"> 0 </span> <span id="LJuEvT9zCKe-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="PdpI1jpQoN5-num" class="report-val count"> 0 </span> <span id="PdpI1jpQoN5-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr class='sort-fixed'>
+            <td></td>
+            <td><span class='text'>Other</span></td>
+            <td><div class='report-val'><span id="DslKuINhoGf-num" class="report-val count"> 0 </span> <span id="DslKuINhoGf-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="fCVn5YyuWnm-num" class="report-val count"> 0 </span> <span id="fCVn5YyuWnm-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="UoeWs5uH3X6-num" class="report-val count"> 0 </span> <span id="UoeWs5uH3X6-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dUdSZl4zYJ0-num" class="report-val count"> 0 </span> <span id="dUdSZl4zYJ0-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="pNc3v493Isw-num" class="report-val count"> 0 </span> <span id="pNc3v493Isw-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="H6NQG40IEXb-num" class="report-val count"> 0 </span> <span id="H6NQG40IEXb-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="bY1c7QtvvV6-num" class="report-val count"> 0 </span> <span id="bY1c7QtvvV6-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="VM8xOFgkYNI-num" class="report-val count"> 0 </span> <span id="VM8xOFgkYNI-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="o0l7DuWoGAv-num" class="report-val count"> 0 </span> <span id="o0l7DuWoGAv-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="DYwA5T5N7FY-num" class="report-val count"> 0 </span> <span id="DYwA5T5N7FY-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+
+
+          <tr class='sort-fixed'>
+            <td></td>
+            <td><span class='text'>Unknown</span></td>
+            <td><div class='report-val'><span id="X5sKpvu07Qn-num" class="report-val count"> 0 </span> <span id="X5sKpvu07Qn-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="A0VItsN8RPy-num" class="report-val count"> 0 </span> <span id="A0VItsN8RPy-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="wQkQXfCTs0j-num" class="report-val count"> 0 </span> <span id="wQkQXfCTs0j-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="E8DxalzPiZE-num" class="report-val count"> 0 </span> <span id="E8DxalzPiZE-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="KM9nv2IJHry-num" class="report-val count"> 0 </span> <span id="KM9nv2IJHry-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="cS4PF1f980z-num" class="report-val count"> 0 </span> <span id="cS4PF1f980z-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="i9hljnD9Qf5-num" class="report-val count"> 0 </span> <span id="i9hljnD9Qf5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="OaX5nlbir9x-num" class="report-val count"> 0 </span> <span id="OaX5nlbir9x-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Jfg3eEjXMON-num" class="report-val count"> 0 </span> <span id="Jfg3eEjXMON-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="QSCh3a3d5vE-num" class="report-val count"> 0 </span> <span id="QSCh3a3d5vE-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+          <tr class='sort-fixed'>
+            <td></td>
+            <td><span class='text'>Missing from chart</span></td>
+            <td><div class='report-val'><span id="SneTdt9HBYY-num" class="report-val count"> 0 </span> <span id="SneTdt9HBYY-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="mR5fyO8ZhE0-num" class="report-val count"> 0 </span> <span id="mR5fyO8ZhE0-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="DE9MridM5QI-num" class="report-val count"> 0 </span> <span id="DE9MridM5QI-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="J5NCSEU9l3o-num" class="report-val count"> 0 </span> <span id="J5NCSEU9l3o-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="sN11C36Hm10-num" class="report-val count"> 0 </span> <span id="sN11C36Hm10-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="S8gVGsx0cSV-num" class="report-val count"> 0 </span> <span id="S8gVGsx0cSV-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="uWDlHqiaMiT-num" class="report-val count"> 0 </span> <span id="uWDlHqiaMiT-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Bg3BIOzcisn-num" class="report-val count"> 0 </span> <span id="Bg3BIOzcisn-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="exc2VqTdwxa-num" class="report-val count"> 0 </span> <span id="exc2VqTdwxa-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="q14HutadDLU-num" class="report-val count"> 0 </span> <span id="q14HutadDLU-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+
+        </tbody>
+        <tbody id='CNyk9b3QPJv'>
+
+          <tr class='top-row'><td><span class='text'>Injury Type</span></td>
+            <td><span class='text'>Airway obstruction</span></td>
+            <td><div class='report-val'><span id="hfXMauQVKjd-num" class="report-val count"> 0 </span> <span id="hfXMauQVKjd-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="zO6dvqjhvT4-num" class="report-val count"> 0 </span> <span id="zO6dvqjhvT4-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tz6ibHSDgsL-num" class="report-val count"> 0 </span> <span id="tz6ibHSDgsL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="D9Ydt7vlfKw-num" class="report-val count"> 0 </span> <span id="D9Ydt7vlfKw-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="LxuaDxZCgkd-num" class="report-val count"> 0 </span> <span id="LxuaDxZCgkd-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="SYCNoKTmauV-num" class="report-val count"> 0 </span> <span id="SYCNoKTmauV-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="SXP64aSweLn-num" class="report-val count"> 0 </span> <span id="SXP64aSweLn-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="vp6W9eM0Aya-num" class="report-val count"> 0 </span> <span id="vp6W9eM0Aya-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="CZDYuP5hmOb-num" class="report-val count"> 0 </span> <span id="CZDYuP5hmOb-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="UzZ5rrrsTWm-num" class="report-val count"> 0 </span> <span id="UzZ5rrrsTWm-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Altered mental status</span></td>
+            <td><div class='report-val'><span id="j6JrbAludMJ-num" class="report-val count"> 0 </span> <span id="j6JrbAludMJ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="MU5GCMPIaE9-num" class="report-val count"> 0 </span> <span id="MU5GCMPIaE9-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ZPIIC58WpCk-num" class="report-val count"> 0 </span> <span id="ZPIIC58WpCk-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ZI4rAGfh3y6-num" class="report-val count"> 0 </span> <span id="ZI4rAGfh3y6-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="S5ngwqF9liy-num" class="report-val count"> 0 </span> <span id="S5ngwqF9liy-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="QVYRM1QSTyG-num" class="report-val count"> 0 </span> <span id="QVYRM1QSTyG-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="YTHbidfTxeR-num" class="report-val count"> 0 </span> <span id="YTHbidfTxeR-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="CZr0195U98J-num" class="report-val count"> 0 </span> <span id="CZr0195U98J-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="XDjNlWo8ZOG-num" class="report-val count"> 0 </span> <span id="XDjNlWo8ZOG-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="QugLWjapb1X-num" class="report-val count"> 0 </span> <span id="QugLWjapb1X-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Avulsion amputation</span></td>
+            <td><div class='report-val'><span id="ySIwf0GxhJ7-num" class="report-val count"> 0 </span> <span id="ySIwf0GxhJ7-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xZIBJLQCAXx-num" class="report-val count"> 0 </span> <span id="xZIBJLQCAXx-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="miEI1eBfgdH-num" class="report-val count"> 0 </span> <span id="miEI1eBfgdH-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="YJqzT8sY98H-num" class="report-val count"> 0 </span> <span id="YJqzT8sY98H-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ZoFXBa3bqqd-num" class="report-val count"> 0 </span> <span id="ZoFXBa3bqqd-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="TjHyfiszXGZ-num" class="report-val count"> 0 </span> <span id="TjHyfiszXGZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tXrc8Vd0NCN-num" class="report-val count"> 0 </span> <span id="tXrc8Vd0NCN-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Z7LRGUgkmDr-num" class="report-val count"> 0 </span> <span id="Z7LRGUgkmDr-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="NlJkQR8LX9l-num" class="report-val count"> 0 </span> <span id="NlJkQR8LX9l-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="osiMHSLvuTz-num" class="report-val count"> 0 </span> <span id="osiMHSLvuTz-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Burn</span></td>
+            <td><div class='report-val'><span id="neiJfS5dzz0-num" class="report-val count"> 0 </span> <span id="neiJfS5dzz0-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="f8kMHxqXSTM-num" class="report-val count"> 0 </span> <span id="f8kMHxqXSTM-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="b4aZWnvRcnq-num" class="report-val count"> 0 </span> <span id="b4aZWnvRcnq-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="UVSk6ogrOIQ-num" class="report-val count"> 0 </span> <span id="UVSk6ogrOIQ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="yXnrX5vuszA-num" class="report-val count"> 0 </span> <span id="yXnrX5vuszA-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="MB7IhG4GHrB-num" class="report-val count"> 0 </span> <span id="MB7IhG4GHrB-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="S5d39YPeHP9-num" class="report-val count"> 0 </span> <span id="S5d39YPeHP9-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="jCL79ZLAsi3-num" class="report-val count"> 0 </span> <span id="jCL79ZLAsi3-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="PqB62yeCAiH-num" class="report-val count"> 0 </span> <span id="PqB62yeCAiH-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="oZh63L97Qp5-num" class="report-val count"> 0 </span> <span id="oZh63L97Qp5-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Closed fracture</span></td>
+            <td><div class='report-val'><span id="RIy7C5M1sxj-num" class="report-val count"> 0 </span> <span id="RIy7C5M1sxj-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="oQBGQbp95mn-num" class="report-val count"> 0 </span> <span id="oQBGQbp95mn-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="pDFNatGAKFL-num" class="report-val count"> 0 </span> <span id="pDFNatGAKFL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="U8ELcd74YeW-num" class="report-val count"> 0 </span> <span id="U8ELcd74YeW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ELQhnbHBGWL-num" class="report-val count"> 0 </span> <span id="ELQhnbHBGWL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="GcckVyH7ZAi-num" class="report-val count"> 0 </span> <span id="GcckVyH7ZAi-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="bhXYoLcULao-num" class="report-val count"> 0 </span> <span id="bhXYoLcULao-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="uiqaLU4Lbd6-num" class="report-val count"> 0 </span> <span id="uiqaLU4Lbd6-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="mXbp2GXCthD-num" class="report-val count"> 0 </span> <span id="mXbp2GXCthD-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="fbR8TEGZRAY-num" class="report-val count"> 0 </span> <span id="fbR8TEGZRAY-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Coagulopathy</span></td>
+            <td><div class='report-val'><span id="xflOylNSADm-num" class="report-val count"> 0 </span> <span id="xflOylNSADm-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="pLbTnI2b9Bt-num" class="report-val count"> 0 </span> <span id="pLbTnI2b9Bt-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="k48cFCEodN5-num" class="report-val count"> 0 </span> <span id="k48cFCEodN5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="o2QVjwU3fdC-num" class="report-val count"> 0 </span> <span id="o2QVjwU3fdC-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ACkXXodpQbc-num" class="report-val count"> 0 </span> <span id="ACkXXodpQbc-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="IPq8ahdH4g5-num" class="report-val count"> 0 </span> <span id="IPq8ahdH4g5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="MYKAa4FOmT7-num" class="report-val count"> 0 </span> <span id="MYKAa4FOmT7-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="yLxbnOJvQHv-num" class="report-val count"> 0 </span> <span id="yLxbnOJvQHv-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="AmQM3Sd1su3-num" class="report-val count"> 0 </span> <span id="AmQM3Sd1su3-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="AWzkHb3BOHE-num" class="report-val count"> 0 </span> <span id="AWzkHb3BOHE-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Compartment syndrome</span></td>
+            <td><div class='report-val'><span id="BEw0RrANSTC-num" class="report-val count"> 0 </span> <span id="BEw0RrANSTC-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="uPu8h1Yv0vM-num" class="report-val count"> 0 </span> <span id="uPu8h1Yv0vM-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="CIDXoa22wRS-num" class="report-val count"> 0 </span> <span id="CIDXoa22wRS-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="wlrHaGV2r5q-num" class="report-val count"> 0 </span> <span id="wlrHaGV2r5q-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="NN9W4KVVhwM-num" class="report-val count"> 0 </span> <span id="NN9W4KVVhwM-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="fwoxuTW3sNu-num" class="report-val count"> 0 </span> <span id="fwoxuTW3sNu-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="CXynZlnULtw-num" class="report-val count"> 0 </span> <span id="CXynZlnULtw-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="jBDmxrDPqrK-num" class="report-val count"> 0 </span> <span id="jBDmxrDPqrK-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="e3m8XwaCupH-num" class="report-val count"> 0 </span> <span id="e3m8XwaCupH-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="MDFFeykQTB9-num" class="report-val count"> 0 </span> <span id="MDFFeykQTB9-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span>Complication pregnancy</span></td>
+            <td><div class='report-val'><span id="B3uPy9xBcvp-num" class="report-val count"> 0 </span> <span id="B3uPy9xBcvp-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="puaYdIIO9Wl-num" class="report-val count"> 0 </span> <span id="puaYdIIO9Wl-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="vKx5nGd9ewW-num" class="report-val count"> 0 </span> <span id="vKx5nGd9ewW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="RQVciEMs7aQ-num" class="report-val count"> 0 </span> <span id="RQVciEMs7aQ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="mYFzowKmeev-num" class="report-val count"> 0 </span> <span id="mYFzowKmeev-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ibYTolAhwZm-num" class="report-val count"> 0 </span> <span id="ibYTolAhwZm-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="OAdUNfw1650-num" class="report-val count"> 0 </span> <span id="OAdUNfw1650-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="yFF8rbO5FPL-num" class="report-val count"> 0 </span> <span id="yFF8rbO5FPL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dbeAzRxZJWC-num" class="report-val count"> 0 </span> <span id="dbeAzRxZJWC-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xoW4flgSPO8-num" class="report-val count"> 0 </span> <span id="xoW4flgSPO8-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Contusion abrasion</span></td>
+            <td><div class='report-val'><span id="ociVvHXX2o2-num" class="report-val count"> 0 </span> <span id="ociVvHXX2o2-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="zQAUWHB4xtW-num" class="report-val count"> 0 </span> <span id="zQAUWHB4xtW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="uE9783hGlxn-num" class="report-val count"> 0 </span> <span id="uE9783hGlxn-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="v0TyetrRPTW-num" class="report-val count"> 0 </span> <span id="v0TyetrRPTW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="jvbMApRXfnF-num" class="report-val count"> 0 </span> <span id="jvbMApRXfnF-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="NWShSv35Kbn-num" class="report-val count"> 0 </span> <span id="NWShSv35Kbn-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="AMYnMbKgvfO-num" class="report-val count"> 0 </span> <span id="AMYnMbKgvfO-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="E3LAE7PBRqa-num" class="report-val count"> 0 </span> <span id="E3LAE7PBRqa-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="oqprxV9Oqav-num" class="report-val count"> 0 </span> <span id="oqprxV9Oqav-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="LJUTN7XbXA2-num" class="report-val count"> 0 </span> <span id="LJUTN7XbXA2-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Crush injury</span></td>
+            <td><div class='report-val'><span id="eUdmjuyeE1p-num" class="report-val count"> 0 </span> <span id="eUdmjuyeE1p-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="WA3nPzr8mJU-num" class="report-val count"> 0 </span> <span id="WA3nPzr8mJU-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="kRH89g2w2Dw-num" class="report-val count"> 0 </span> <span id="kRH89g2w2Dw-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="JmgfzAoDIIZ-num" class="report-val count"> 0 </span> <span id="JmgfzAoDIIZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="RkUvb4iyiEO-num" class="report-val count"> 0 </span> <span id="RkUvb4iyiEO-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="WW3VlQ9md2A-num" class="report-val count"> 0 </span> <span id="WW3VlQ9md2A-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="FRbAkdkTAAC-num" class="report-val count"> 0 </span> <span id="FRbAkdkTAAC-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="g3MgPTH8lYi-num" class="report-val count"> 0 </span> <span id="g3MgPTH8lYi-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="JWdkrUzobeO-num" class="report-val count"> 0 </span> <span id="JWdkrUzobeO-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="KZsiWzplLDd-num" class="report-val count"> 0 </span> <span id="KZsiWzplLDd-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Foreign body</span></td>
+            <td><div class='report-val'><span id="XNevZo6Ftld-num" class="report-val count"> 0 </span> <span id="XNevZo6Ftld-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="K1SeWXVRFBX-num" class="report-val count"> 0 </span> <span id="K1SeWXVRFBX-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="NwkXKPxgv1u-num" class="report-val count"> 0 </span> <span id="NwkXKPxgv1u-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="flZZ4I1q8br-num" class="report-val count"> 0 </span> <span id="flZZ4I1q8br-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="J5E6BEtz8DW-num" class="report-val count"> 0 </span> <span id="J5E6BEtz8DW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="KzKMwjoI8n6-num" class="report-val count"> 0 </span> <span id="KzKMwjoI8n6-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="v74JveOZW8d-num" class="report-val count"> 0 </span> <span id="v74JveOZW8d-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="vVJUgY7iEP4-num" class="report-val count"> 0 </span> <span id="vVJUgY7iEP4-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dfyMg3EN7Ms-num" class="report-val count"> 0 </span> <span id="dfyMg3EN7Ms-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Ea9BrCPwY35-num" class="report-val count"> 0 </span> <span id="Ea9BrCPwY35-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Joint dislocation</span></td>
+            <td><div class='report-val'><span id="Rx2HcKX4wRu-num" class="report-val count"> 0 </span> <span id="Rx2HcKX4wRu-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="zrdBi7Z4p7W-num" class="report-val count"> 0 </span> <span id="zrdBi7Z4p7W-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="PIJFJTCPPUa-num" class="report-val count"> 0 </span> <span id="PIJFJTCPPUa-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="sIZ2DzQE9RU-num" class="report-val count"> 0 </span> <span id="sIZ2DzQE9RU-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="gADuCT106eB-num" class="report-val count"> 0 </span> <span id="gADuCT106eB-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="DdmgbwKL0pa-num" class="report-val count"> 0 </span> <span id="DdmgbwKL0pa-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ZbfDHS7SlcT-num" class="report-val count"> 0 </span> <span id="ZbfDHS7SlcT-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="BFLGGn71E1X-num" class="report-val count"> 0 </span> <span id="BFLGGn71E1X-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="hjuPRVfSlhE-num" class="report-val count"> 0 </span> <span id="hjuPRVfSlhE-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="oqdKN3YRiVM-num" class="report-val count"> 0 </span> <span id="oqdKN3YRiVM-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+          <tr>
+            <td></td>
+            <td><span class='text'>Nerve spinal cord injury</span></td>
+            <td><div class='report-val'><span id="mt8UTxfxYPK-num" class="report-val count"> 0 </span> <span id="mt8UTxfxYPK-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="eFQiP1hzQDJ-num" class="report-val count"> 0 </span> <span id="eFQiP1hzQDJ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="XMQXMkPd0o8-num" class="report-val count"> 0 </span> <span id="XMQXMkPd0o8-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ZOV2J0o34Di-num" class="report-val count"> 0 </span> <span id="ZOV2J0o34Di-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="qhlvXo8p7vD-num" class="report-val count"> 0 </span> <span id="qhlvXo8p7vD-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="zAUNfKQC4OH-num" class="report-val count"> 0 </span> <span id="zAUNfKQC4OH-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="IYFlrnuYA22-num" class="report-val count"> 0 </span> <span id="IYFlrnuYA22-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="YOGKVEBvpke-num" class="report-val count"> 0 </span> <span id="YOGKVEBvpke-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xGIIYLEMxbB-num" class="report-val count"> 0 </span> <span id="xGIIYLEMxbB-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="y7uLsrDu0rh-num" class="report-val count"> 0 </span> <span id="y7uLsrDu0rh-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Open fracture</span></td>
+            <td><div class='report-val'><span id="KttfkOaLI9A-num" class="report-val count"> 0 </span> <span id="KttfkOaLI9A-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="VZQSWwLTZg3-num" class="report-val count"> 0 </span> <span id="VZQSWwLTZg3-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="j9Ir0546gv0-num" class="report-val count"> 0 </span> <span id="j9Ir0546gv0-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="h9Co3CEMgji-num" class="report-val count"> 0 </span> <span id="h9Co3CEMgji-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tFBC2NGf2FL-num" class="report-val count"> 0 </span> <span id="tFBC2NGf2FL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="lhvXGW8rg5o-num" class="report-val count"> 0 </span> <span id="lhvXGW8rg5o-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="d0owf0Ck9cY-num" class="report-val count"> 0 </span> <span id="d0owf0Ck9cY-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="KC1onyUscpU-num" class="report-val count"> 0 </span> <span id="KC1onyUscpU-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="bF6ETKinlQD-num" class="report-val count"> 0 </span> <span id="bF6ETKinlQD-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="bpr4fUCcJd0-num" class="report-val count"> 0 </span> <span id="bpr4fUCcJd0-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Open wound</span></td>
+            <td><div class='report-val'><span id="MoekSYzwqkB-num" class="report-val count"> 0 </span> <span id="MoekSYzwqkB-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ygg6pKhVbNw-num" class="report-val count"> 0 </span> <span id="ygg6pKhVbNw-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="bXsHytM7XIc-num" class="report-val count"> 0 </span> <span id="bXsHytM7XIc-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="oxoHhUOmxcD-num" class="report-val count"> 0 </span> <span id="oxoHhUOmxcD-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Oa7mxI2rRdX-num" class="report-val count"> 0 </span> <span id="Oa7mxI2rRdX-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="K26YGOYIQun-num" class="report-val count"> 0 </span> <span id="K26YGOYIQun-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="sHI7w5unpYf-num" class="report-val count"> 0 </span> <span id="sHI7w5unpYf-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dQwIRLtL8b3-num" class="report-val count"> 0 </span> <span id="dQwIRLtL8b3-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="plHkwMEvZLx-num" class="report-val count"> 0 </span> <span id="plHkwMEvZLx-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="aYtYWuy1Keo-num" class="report-val count"> 0 </span> <span id="aYtYWuy1Keo-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Pneumothorax haemothorax</span></td>
+            <td><div class='report-val'><span id="E9tRDwL583V-num" class="report-val count"> 0 </span> <span id="E9tRDwL583V-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="lEtgo59pQgw-num" class="report-val count"> 0 </span> <span id="lEtgo59pQgw-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tRHEsQOZJ15-num" class="report-val count"> 0 </span> <span id="tRHEsQOZJ15-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Qr8A8319UyX-num" class="report-val count"> 0 </span> <span id="Qr8A8319UyX-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="lvWc457VtJN-num" class="report-val count"> 0 </span> <span id="lvWc457VtJN-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="l9U83V4bZPR-num" class="report-val count"> 0 </span> <span id="l9U83V4bZPR-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="UCp5h0mRxcr-num" class="report-val count"> 0 </span> <span id="UCp5h0mRxcr-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="CGnOFyxGVBf-num" class="report-val count"> 0 </span> <span id="CGnOFyxGVBf-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ovkK6m749Ed-num" class="report-val count"> 0 </span> <span id="ovkK6m749Ed-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="wbq4J52elUr-num" class="report-val count"> 0 </span> <span id="wbq4J52elUr-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Respiratory failure</span></td>
+            <td><div class='report-val'><span id="nujKU6wvQ0m-num" class="report-val count"> 0 </span> <span id="nujKU6wvQ0m-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="elsLU9BKakf-num" class="report-val count"> 0 </span> <span id="elsLU9BKakf-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ipWbjVrTRoy-num" class="report-val count"> 0 </span> <span id="ipWbjVrTRoy-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="MxbUh1OCHtq-num" class="report-val count"> 0 </span> <span id="MxbUh1OCHtq-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ZOeet8xbR3W-num" class="report-val count"> 0 </span> <span id="ZOeet8xbR3W-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="KPAAIFdYqn9-num" class="report-val count"> 0 </span> <span id="KPAAIFdYqn9-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="i0FzmuVlugd-num" class="report-val count"> 0 </span> <span id="i0FzmuVlugd-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tNSXjs631r2-num" class="report-val count"> 0 </span> <span id="tNSXjs631r2-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="elOX5jDm0ma-num" class="report-val count"> 0 </span> <span id="elOX5jDm0ma-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="unnDV3AHlqV-num" class="report-val count"> 0 </span> <span id="unnDV3AHlqV-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Shock</span></td>
+            <td><div class='report-val'><span id="p1nyVcKZdRx-num" class="report-val count"> 0 </span> <span id="p1nyVcKZdRx-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="uf72XFDog1p-num" class="report-val count"> 0 </span> <span id="uf72XFDog1p-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="BsN2qd0SJS3-num" class="report-val count"> 0 </span> <span id="BsN2qd0SJS3-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="hA2fuTfWJfa-num" class="report-val count"> 0 </span> <span id="hA2fuTfWJfa-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Ygy7T6EEMac-num" class="report-val count"> 0 </span> <span id="Ygy7T6EEMac-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="omSFpi5IfFy-num" class="report-val count"> 0 </span> <span id="omSFpi5IfFy-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="gyen6ztvjNv-num" class="report-val count"> 0 </span> <span id="gyen6ztvjNv-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="L6MIJDkaYLR-num" class="report-val count"> 0 </span> <span id="L6MIJDkaYLR-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="RCRhlR5vB99-num" class="report-val count"> 0 </span> <span id="RCRhlR5vB99-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="UrkOVt4l3MY-num" class="report-val count"> 0 </span> <span id="UrkOVt4l3MY-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td>Sprain muscle/tendon injury</td>
+            <td><div class='report-val'><span id="gHDJjZNNmf7-num" class="report-val count"> 0 </span> <span id="gHDJjZNNmf7-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="FogSSngv468-num" class="report-val count"> 0 </span> <span id="FogSSngv468-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="P2QWHZLCP1z-num" class="report-val count"> 0 </span> <span id="P2QWHZLCP1z-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="NvXQv2eEDgw-num" class="report-val count"> 0 </span> <span id="NvXQv2eEDgw-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="oEnJG7lAn3b-num" class="report-val count"> 0 </span> <span id="oEnJG7lAn3b-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="MyupU4ldXMt-num" class="report-val count"> 0 </span> <span id="MyupU4ldXMt-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="pHHii3vE8jG-num" class="report-val count"> 0 </span> <span id="pHHii3vE8jG-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="AEOaJJFpT8a-num" class="report-val count"> 0 </span> <span id="AEOaJJFpT8a-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="fYV42UzLlpq-num" class="report-val count"> 0 </span> <span id="fYV42UzLlpq-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="KOaW0wNhait-num" class="report-val count"> 0 </span> <span id="KOaW0wNhait-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Tamponade</span></td>
+            <td><div class='report-val'><span id="IgJoCqRClt6-num" class="report-val count"> 0 </span> <span id="IgJoCqRClt6-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="mhHG5DWWXn7-num" class="report-val count"> 0 </span> <span id="mhHG5DWWXn7-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Tuf1XpWUZLe-num" class="report-val count"> 0 </span> <span id="Tuf1XpWUZLe-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="E38QOSSU3Q4-num" class="report-val count"> 0 </span> <span id="E38QOSSU3Q4-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="t3rA33Rni2p-num" class="report-val count"> 0 </span> <span id="t3rA33Rni2p-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="RxHotCjpgsZ-num" class="report-val count"> 0 </span> <span id="RxHotCjpgsZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="HDdhXNBQ1pl-num" class="report-val count"> 0 </span> <span id="HDdhXNBQ1pl-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="SaptKN4ZJMO-num" class="report-val count"> 0 </span> <span id="SaptKN4ZJMO-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="P4ceFV3WGyN-num" class="report-val count"> 0 </span> <span id="P4ceFV3WGyN-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Q3sBeCah7yl-num" class="report-val count"> 0 </span> <span id="Q3sBeCah7yl-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+          <tr class='sort-fixed'>
+            <td></td>
+            <td><span class='text'>Other unspecified</span></td>
+            <td><div class='report-val'><span id="OGJa0R4pjsn-num" class="report-val count"> 0 </span> <span id="OGJa0R4pjsn-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="hibVItqjRi5-num" class="report-val count"> 0 </span> <span id="hibVItqjRi5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="aLFFSiwd3DX-num" class="report-val count"> 0 </span> <span id="aLFFSiwd3DX-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="lwsyaqjTqXP-num" class="report-val count"> 0 </span> <span id="lwsyaqjTqXP-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="wbKCkAjiAEe-num" class="report-val count"> 0 </span> <span id="wbKCkAjiAEe-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="sKB0HvGYWVJ-num" class="report-val count"> 0 </span> <span id="sKB0HvGYWVJ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Ye0x3XR1P3R-num" class="report-val count"> 0 </span> <span id="Ye0x3XR1P3R-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="PIahbVVDUX8-num" class="report-val count"> 0 </span> <span id="PIahbVVDUX8-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="V7s5728m6py-num" class="report-val count"> 0 </span> <span id="V7s5728m6py-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="uUMreCpWYm1-num" class="report-val count"> 0 </span> <span id="uUMreCpWYm1-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+                    <tr class='sort-fixed'>
+                      <td></td>
+                      <td><span class='text'>Missing</span></td>
+                      <td><div class='report-val'><span id="IJyYOiWL1FB-num" class="report-val count"> 0 </span> <span id="IJyYOiWL1FB-val" class="report-val pct"> (0.0%) </span></div></td>
+                      <td><div class='report-val'><span id="mzzfz9awTeN-num" class="report-val count"> 0 </span> <span id="mzzfz9awTeN-val" class="report-val pct"> (0.0%) </span></div></td>
+                      <td><div class='report-val'><span id="eGpuHVDxJEv-num" class="report-val count"> 0 </span> <span id="eGpuHVDxJEv-val" class="report-val pct"> (0.0%) </span></div></td>
+                      <td><div class='report-val'><span id="BgfXnm4JzRQ-num" class="report-val count"> 0 </span> <span id="BgfXnm4JzRQ-val" class="report-val pct"> (0.0%) </span></div></td>
+                      <td><div class='report-val'><span id="TdrGVwsfzeG-num" class="report-val count"> 0 </span> <span id="TdrGVwsfzeG-val" class="report-val pct"> (0.0%) </span></div></td>
+                      <td><div class='report-val'><span id="ZnC912FPcFN-num" class="report-val count"> 0 </span> <span id="ZnC912FPcFN-val" class="report-val pct"> (0.0%) </span></div></td>
+                      <td><div class='report-val'><span id="Bhs5zfa4d7H-num" class="report-val count"> 0 </span> <span id="Bhs5zfa4d7H-val" class="report-val pct"> (0.0%) </span></div></td>
+                      <td><div class='report-val'><span id="TvDwtjCUQxb-num" class="report-val count"> 0 </span> <span id="TvDwtjCUQxb-val" class="report-val pct"> (0.0%) </span></div></td>
+                      <td><div class='report-val'><span id="MBWF8bkxSxw-num" class="report-val count"> 0 </span> <span id="MBWF8bkxSxw-val" class="report-val pct"> (0.0%) </span></div></td>
+                      <td><div class='report-val'><span id="Ev2oVT8Rjo0-num" class="report-val count"> 0 </span> <span id="Ev2oVT8Rjo0-val" class="report-val pct"> (0.0%) </span></div></td>
+                    </tr>
+                </tbody>
+                <tbody id='zX0L6tzJUYU'>
+          <tr class='top-row'><td><span class='text'>Injury Anatomic Location</span></td>
+            <td><span>Abdominal wall, Abdominopelvic, Bony pelivs, Genitalia</span></td>
+            <td><div class='report-val'><span id="xDHz3Ps2uSl-num" class="report-val count"> 0 </span> <span id="xDHz3Ps2uSl-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="OFImOCPNtzz-num" class="report-val count"> 0 </span> <span id="OFImOCPNtzz-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Hg4R7USYrSt-num" class="report-val count"> 0 </span> <span id="Hg4R7USYrSt-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="INzcqltErJ6-num" class="report-val count"> 0 </span> <span id="INzcqltErJ6-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="sF4lhZ7WJsg-num" class="report-val count"> 0 </span> <span id="sF4lhZ7WJsg-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="BTHHc7cnQsM-num" class="report-val count"> 0 </span> <span id="BTHHc7cnQsM-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="vKYUQvKCuvQ-num" class="report-val count"> 0 </span> <span id="vKYUQvKCuvQ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="MTgeHG9B8EZ-num" class="report-val count"> 0 </span> <span id="MTgeHG9B8EZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ahtag0IWNKc-num" class="report-val count"> 0 </span> <span id="ahtag0IWNKc-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="JGFhsbvlvEQ-num" class="report-val count"> 0 </span> <span id="JGFhsbvlvEQ-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span>Chest Wall, Intrathoracic</span></td>
+            <td><div class='report-val'><span id="a9gZ2M3q4uc-num" class="report-val count"> 0 </span> <span id="a9gZ2M3q4uc-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="HK0kCxJeWEL-num" class="report-val count"> 0 </span> <span id="HK0kCxJeWEL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="WplbtiL4quA-num" class="report-val count"> 0 </span> <span id="WplbtiL4quA-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="eVPumoq7Uht-num" class="report-val count"> 0 </span> <span id="eVPumoq7Uht-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="jWRPqaRjmMZ-num" class="report-val count"> 0 </span> <span id="jWRPqaRjmMZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="FbhKqoX5U7J-num" class="report-val count"> 0 </span> <span id="FbhKqoX5U7J-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="wwsKBRW62DG-num" class="report-val count"> 0 </span> <span id="wwsKBRW62DG-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="pHELPN5CFyn-num" class="report-val count"> 0 </span> <span id="pHELPN5CFyn-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="WQX68loSfMu-num" class="report-val count"> 0 </span> <span id="WQX68loSfMu-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dnARU8b0J8u-num" class="report-val count"> 0 </span> <span id="dnARU8b0J8u-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>External</span></td>
+            <td><div class='report-val'><span id="vJ37YCX5afp-num" class="report-val count"> 0 </span> <span id="vJ37YCX5afp-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="D8uoUUL9w9R-num" class="report-val count"> 0 </span> <span id="D8uoUUL9w9R-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="CXxjOty3DB0-num" class="report-val count"> 0 </span> <span id="CXxjOty3DB0-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="FGLXJvGgy8D-num" class="report-val count"> 0 </span> <span id="FGLXJvGgy8D-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="VgRmWgRoHXp-num" class="report-val count"> 0 </span> <span id="VgRmWgRoHXp-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="RUJNHZIlTJj-num" class="report-val count"> 0 </span> <span id="RUJNHZIlTJj-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="idmgxFlHgbA-num" class="report-val count"> 0 </span> <span id="idmgxFlHgbA-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="D0T9zPAKP1Y-num" class="report-val count"> 0 </span> <span id="D0T9zPAKP1Y-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="D0krTd5wSYE-num" class="report-val count"> 0 </span> <span id="D0krTd5wSYE-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="KrvoAmSX7gB-num" class="report-val count"> 0 </span> <span id="KrvoAmSX7gB-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span>Head, Face, Neck</span></td>
+            <td><div class='report-val'><span id="wYptHAyXR0p-num" class="report-val count"> 0 </span> <span id="wYptHAyXR0p-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="nxpv95rwSNL-num" class="report-val count"> 0 </span> <span id="nxpv95rwSNL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="GNOdsExOpWe-num" class="report-val count"> 0 </span> <span id="GNOdsExOpWe-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="l49oGhhFn8z-num" class="report-val count"> 0 </span> <span id="l49oGhhFn8z-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="KhXeGd6jXcf-num" class="report-val count"> 0 </span> <span id="KhXeGd6jXcf-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="XPn4RzuMppg-num" class="report-val count"> 0 </span> <span id="XPn4RzuMppg-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="sEYyKcqoVfb-num" class="report-val count"> 0 </span> <span id="sEYyKcqoVfb-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="f87M2AdQhVi-num" class="report-val count"> 0 </span> <span id="f87M2AdQhVi-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="kBs6toGrxBd-num" class="report-val count"> 0 </span> <span id="kBs6toGrxBd-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="bRzcOc11aB1-num" class="report-val count"> 0 </span> <span id="bRzcOc11aB1-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Intracranial</span></td>
+            <td><div class='report-val'><span id="adMGFsaJYx9-num" class="report-val count"> 0 </span> <span id="adMGFsaJYx9-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="BrEASA4e0O3-num" class="report-val count"> 0 </span> <span id="BrEASA4e0O3-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="TXa3xh9eNWl-num" class="report-val count"> 0 </span> <span id="TXa3xh9eNWl-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="YqgOeA4sXJO-num" class="report-val count"> 0 </span> <span id="YqgOeA4sXJO-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="sltn3cUVHRh-num" class="report-val count"> 0 </span> <span id="sltn3cUVHRh-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="bE12V9gb4DQ-num" class="report-val count"> 0 </span> <span id="bE12V9gb4DQ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="yR2gotITcHv-num" class="report-val count"> 0 </span> <span id="yR2gotITcHv-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dSq3CWJSTBL-num" class="report-val count"> 0 </span> <span id="dSq3CWJSTBL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="b1rYeFeNTfS-num" class="report-val count"> 0 </span> <span id="b1rYeFeNTfS-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dZAtz8us7J8-num" class="report-val count"> 0 </span> <span id="dZAtz8us7J8-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Lower Extremity</span></td>
+            <td><div class='report-val'><span id="feurY0XlXTy-num" class="report-val count"> 0 </span> <span id="feurY0XlXTy-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="mwB1pmAMxIA-num" class="report-val count"> 0 </span> <span id="mwB1pmAMxIA-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Qk2KMstTbss-num" class="report-val count"> 0 </span> <span id="Qk2KMstTbss-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="iNggFUCEcw6-num" class="report-val count"> 0 </span> <span id="iNggFUCEcw6-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="raacnZaPp9u-num" class="report-val count"> 0 </span> <span id="raacnZaPp9u-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="pSEMOqzb2sp-num" class="report-val count"> 0 </span> <span id="pSEMOqzb2sp-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="LSi7k4d8rEZ-num" class="report-val count"> 0 </span> <span id="LSi7k4d8rEZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="K9j5jqk37L5-num" class="report-val count"> 0 </span> <span id="K9j5jqk37L5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="esehTXIriA8-num" class="report-val count"> 0 </span> <span id="esehTXIriA8-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="gPVZ2H92I8r-num" class="report-val count"> 0 </span> <span id="gPVZ2H92I8r-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Spine</span></td>
+            <td><div class='report-val'><span id="bQcOme34sSX-num" class="report-val count"> 0 </span> <span id="bQcOme34sSX-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="cBglMBFeikH-num" class="report-val count"> 0 </span> <span id="cBglMBFeikH-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xeDK2k7yWwe-num" class="report-val count"> 0 </span> <span id="xeDK2k7yWwe-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="AECq505AMMU-num" class="report-val count"> 0 </span> <span id="AECq505AMMU-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="jKRVnAQxQ8C-num" class="report-val count"> 0 </span> <span id="jKRVnAQxQ8C-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="KP7wdqH1nVZ-num" class="report-val count"> 0 </span> <span id="KP7wdqH1nVZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="SIDK5IdbwiG-num" class="report-val count"> 0 </span> <span id="SIDK5IdbwiG-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="atSXT2Lml6i-num" class="report-val count"> 0 </span> <span id="atSXT2Lml6i-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="YQHHvTh5J70-num" class="report-val count"> 0 </span> <span id="YQHHvTh5J70-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tLvXshKIopU-num" class="report-val count"> 0 </span> <span id="tLvXshKIopU-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span>Upper Extremity, Hand</span></td>
+            <td><div class='report-val'><span id="jh30kCQifbj-num" class="report-val count"> 0 </span> <span id="jh30kCQifbj-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="q9TMLd0XilU-num" class="report-val count"> 0 </span> <span id="q9TMLd0XilU-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="hIA8DxGYiP5-num" class="report-val count"> 0 </span> <span id="hIA8DxGYiP5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="gc0ZCKQvfi1-num" class="report-val count"> 0 </span> <span id="gc0ZCKQvfi1-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xHqpGumZm17-num" class="report-val count"> 0 </span> <span id="xHqpGumZm17-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="LUoyusp0gWW-num" class="report-val count"> 0 </span> <span id="LUoyusp0gWW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="jfuUpadh2jD-num" class="report-val count"> 0 </span> <span id="jfuUpadh2jD-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="odA3zSGUP7d-num" class="report-val count"> 0 </span> <span id="odA3zSGUP7d-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="QUdJ00M8JC7-num" class="report-val count"> 0 </span> <span id="QUdJ00M8JC7-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="MDJpsLxA6oj-num" class="report-val count"> 0 </span> <span id="MDJpsLxA6oj-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+          <tr class='sort-fixed'>
+            <td></td>
+            <td><span class='text'>Other</span></td>
+            <td><div class='report-val'><span id="lnsssoHRYcJ-num" class="report-val count"> 0 </span> <span id="lnsssoHRYcJ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="f26ZFFX2m9U-num" class="report-val count"> 0 </span> <span id="f26ZFFX2m9U-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="KHZiyKbh4Yb-num" class="report-val count"> 0 </span> <span id="KHZiyKbh4Yb-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ixNuP3zC88P-num" class="report-val count"> 0 </span> <span id="ixNuP3zC88P-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="pfyOVGwUMF5-num" class="report-val count"> 0 </span> <span id="pfyOVGwUMF5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="UTesiDfkoxT-num" class="report-val count"> 0 </span> <span id="UTesiDfkoxT-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="cl56p8ZD5Ju-num" class="report-val count"> 0 </span> <span id="cl56p8ZD5Ju-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="gSkZoCWbKVB-num" class="report-val count"> 0 </span> <span id="gSkZoCWbKVB-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="oo6dEjDXCc5-num" class="report-val count"> 0 </span> <span id="oo6dEjDXCc5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="lAbfHPf0fSX-num" class="report-val count"> 0 </span> <span id="lAbfHPf0fSX-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+        </tbody>
+        <tbody id='YNdatZ6GQmn'>
+
+          <tr class='top-row'><td><span class='text'>Arrival Mode</span></td>
+            <td><span class='text'>Aeromedical transport</span></td>
+            <td><div class='report-val'><span id="dNWCJOsGNVz-num" class="report-val count"> 0 </span> <span id="dNWCJOsGNVz-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="nNyjgS508hA-num" class="report-val count"> 0 </span> <span id="nNyjgS508hA-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="bTk89k7HAUG-num" class="report-val count"> 0 </span> <span id="bTk89k7HAUG-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="uUrNzAc96LR-num" class="report-val count"> 0 </span> <span id="uUrNzAc96LR-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="nY6mebLlEFL-num" class="report-val count"> 0 </span> <span id="nY6mebLlEFL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="RyCPPshOriK-num" class="report-val count"> 0 </span> <span id="RyCPPshOriK-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Onz9NgSHtyh-num" class="report-val count"> 0 </span> <span id="Onz9NgSHtyh-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="BWg6K8hUc3C-num" class="report-val count"> 0 </span> <span id="BWg6K8hUc3C-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="hioYRgjd76m-num" class="report-val count"> 0 </span> <span id="hioYRgjd76m-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="caWwhQqTZak-num" class="report-val count"> 0 </span> <span id="caWwhQqTZak-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Ambulance</span></td>
+            <td><div class='report-val'><span id="SEN41gOhIq1-num" class="report-val count"> 0 </span> <span id="SEN41gOhIq1-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="mhW7CeHvKta-num" class="report-val count"> 0 </span> <span id="mhW7CeHvKta-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Gi4PwYCQ4rb-num" class="report-val count"> 0 </span> <span id="Gi4PwYCQ4rb-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Bs2QopaYnZS-num" class="report-val count"> 0 </span> <span id="Bs2QopaYnZS-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="T19S4UlPPTg-num" class="report-val count"> 0 </span> <span id="T19S4UlPPTg-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Jcg5C6B3hrm-num" class="report-val count"> 0 </span> <span id="Jcg5C6B3hrm-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="oi2pKzXlU24-num" class="report-val count"> 0 </span> <span id="oi2pKzXlU24-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="uClg7pXAm2x-num" class="report-val count"> 0 </span> <span id="uClg7pXAm2x-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Oz71iza1fcc-num" class="report-val count"> 0 </span> <span id="Oz71iza1fcc-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="hmNceKaFRDf-num" class="report-val count"> 0 </span> <span id="hmNceKaFRDf-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td>Motorised 2- 3-wheeler</td>
+            <td><div class='report-val'><span id="bXnNp7zvUOi-num" class="report-val count"> 0 </span> <span id="bXnNp7zvUOi-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="PcwlRBtu8HP-num" class="report-val count"> 0 </span> <span id="PcwlRBtu8HP-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="W3gTR5Ns2wE-num" class="report-val count"> 0 </span> <span id="W3gTR5Ns2wE-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="y93ySIgfd1A-num" class="report-val count"> 0 </span> <span id="y93ySIgfd1A-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="WqZxvFFLf9m-num" class="report-val count"> 0 </span> <span id="WqZxvFFLf9m-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ojZVbDUWw2E-num" class="report-val count"> 0 </span> <span id="ojZVbDUWw2E-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="jocu48I5Tgx-num" class="report-val count"> 0 </span> <span id="jocu48I5Tgx-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="JRi5c7qB8dq-num" class="report-val count"> 0 </span> <span id="JRi5c7qB8dq-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xNPGc363DD7-num" class="report-val count"> 0 </span> <span id="xNPGc363DD7-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Ed4u2TJ9mkv-num" class="report-val count"> 0 </span> <span id="Ed4u2TJ9mkv-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td>Non-motorised vehicle</td>
+            <td><div class='report-val'><span id="Bg1IV9d3zWw-num" class="report-val count"> 0 </span> <span id="Bg1IV9d3zWw-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="RNmyIp9IcIp-num" class="report-val count"> 0 </span> <span id="RNmyIp9IcIp-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="WvRtPyGltFc-num" class="report-val count"> 0 </span> <span id="WvRtPyGltFc-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="hMmA1X6oLmX-num" class="report-val count"> 0 </span> <span id="hMmA1X6oLmX-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Y04ooq1Z50N-num" class="report-val count"> 0 </span> <span id="Y04ooq1Z50N-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ii20E1EwvZQ-num" class="report-val count"> 0 </span> <span id="ii20E1EwvZQ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Ttb7sDIffJg-num" class="report-val count"> 0 </span> <span id="Ttb7sDIffJg-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="U1ee5ajI3sl-num" class="report-val count"> 0 </span> <span id="U1ee5ajI3sl-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="G6Stg1D8NyM-num" class="report-val count"> 0 </span> <span id="G6Stg1D8NyM-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="UcKxtJuqdW3-num" class="report-val count"> 0 </span> <span id="UcKxtJuqdW3-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Police</span></td>
+            <td><div class='report-val'><span id="mgoe9eyaXr7-num" class="report-val count"> 0 </span> <span id="mgoe9eyaXr7-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="cY9HLuRNxNB-num" class="report-val count"> 0 </span> <span id="cY9HLuRNxNB-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="bvK7DuUfkQu-num" class="report-val count"> 0 </span> <span id="bvK7DuUfkQu-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="SY1oOJsVz2f-num" class="report-val count"> 0 </span> <span id="SY1oOJsVz2f-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tXeZFtzgwfB-num" class="report-val count"> 0 </span> <span id="tXeZFtzgwfB-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="DFbT4ncCZsI-num" class="report-val count"> 0 </span> <span id="DFbT4ncCZsI-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="p3vRkQviANT-num" class="report-val count"> 0 </span> <span id="p3vRkQviANT-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="fCQPPk7kAOP-num" class="report-val count"> 0 </span> <span id="fCQPPk7kAOP-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="EeXdiIVd9YP-num" class="report-val count"> 0 </span> <span id="EeXdiIVd9YP-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="mwYA662sbrY-num" class="report-val count"> 0 </span> <span id="mwYA662sbrY-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Private vehicle</span></td>
+            <td><div class='report-val'><span id="Qeowg6CxH90-num" class="report-val count"> 0 </span> <span id="Qeowg6CxH90-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="gjRbmlqnqDk-num" class="report-val count"> 0 </span> <span id="gjRbmlqnqDk-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ry2REH2VX6F-num" class="report-val count"> 0 </span> <span id="ry2REH2VX6F-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="GglDoSuY0uf-num" class="report-val count"> 0 </span> <span id="GglDoSuY0uf-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="PKCJGq63HOR-num" class="report-val count"> 0 </span> <span id="PKCJGq63HOR-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="p04ZCiDrQBB-num" class="report-val count"> 0 </span> <span id="p04ZCiDrQBB-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="yeTwJsG4Rct-num" class="report-val count"> 0 </span> <span id="yeTwJsG4Rct-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ZHP3vKsp8fd-num" class="report-val count"> 0 </span> <span id="ZHP3vKsp8fd-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="lW4e1vOIGGB-num" class="report-val count"> 0 </span> <span id="lW4e1vOIGGB-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="lgMGItrNAAv-num" class="report-val count"> 0 </span> <span id="lgMGItrNAAv-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Public transport</span></td>
+            <td><div class='report-val'><span id="FVYOb3DNoAl-num" class="report-val count"> 0 </span> <span id="FVYOb3DNoAl-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="HAKX0mFDH9F-num" class="report-val count"> 0 </span> <span id="HAKX0mFDH9F-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="HkjPpYA1zYy-num" class="report-val count"> 0 </span> <span id="HkjPpYA1zYy-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="g0DbBB6S10r-num" class="report-val count"> 0 </span> <span id="g0DbBB6S10r-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ASdzqeVNfzH-num" class="report-val count"> 0 </span> <span id="ASdzqeVNfzH-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="WM4naxbIDV6-num" class="report-val count"> 0 </span> <span id="WM4naxbIDV6-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="lPbIaAYV4dv-num" class="report-val count"> 0 </span> <span id="lPbIaAYV4dv-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="VUSXHDMOBEf-num" class="report-val count"> 0 </span> <span id="VUSXHDMOBEf-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="KKwra5yY0Cq-num" class="report-val count"> 0 </span> <span id="KKwra5yY0Cq-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="vPawSOO1WRE-num" class="report-val count"> 0 </span> <span id="vPawSOO1WRE-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Taxi</span></td>
+            <td><div class='report-val'><span id="cz8zxZbCNkz-num" class="report-val count"> 0 </span> <span id="cz8zxZbCNkz-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="oV8i3EJHbt5-num" class="report-val count"> 0 </span> <span id="oV8i3EJHbt5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="o4VxI4WFlbP-num" class="report-val count"> 0 </span> <span id="o4VxI4WFlbP-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="OhZwyAdPWPo-num" class="report-val count"> 0 </span> <span id="OhZwyAdPWPo-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="EMboaKlzeVK-num" class="report-val count"> 0 </span> <span id="EMboaKlzeVK-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="vciQlRewZqA-num" class="report-val count"> 0 </span> <span id="vciQlRewZqA-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="g2YlVOVcfBn-num" class="report-val count"> 0 </span> <span id="g2YlVOVcfBn-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="F9dHS17Llxf-num" class="report-val count"> 0 </span> <span id="F9dHS17Llxf-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="IrVhkdsMEgl-num" class="report-val count"> 0 </span> <span id="IrVhkdsMEgl-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="q7T8HSU09fh-num" class="report-val count"> 0 </span> <span id="q7T8HSU09fh-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Walking</span></td>
+            <td><div class='report-val'><span id="T9ONQyEjaSl-num" class="report-val count"> 0 </span> <span id="T9ONQyEjaSl-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="HsRwiebaEi5-num" class="report-val count"> 0 </span> <span id="HsRwiebaEi5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="EfaoobZdGTx-num" class="report-val count"> 0 </span> <span id="EfaoobZdGTx-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="iOflJvfuGTd-num" class="report-val count"> 0 </span> <span id="iOflJvfuGTd-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="iEJsCjbj5HH-num" class="report-val count"> 0 </span> <span id="iEJsCjbj5HH-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="vCXwYNzEWDk-num" class="report-val count"> 0 </span> <span id="vCXwYNzEWDk-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="uEvZUU1vdQH-num" class="report-val count"> 0 </span> <span id="uEvZUU1vdQH-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="DUFTdbx5eqS-num" class="report-val count"> 0 </span> <span id="DUFTdbx5eqS-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="r2rEpgPCAw7-num" class="report-val count"> 0 </span> <span id="r2rEpgPCAw7-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="oRRGSfxYTDR-num" class="report-val count"> 0 </span> <span id="oRRGSfxYTDR-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+          <tr class='sort-fixed'>
+            <td></td>
+            <td><span class='text'>Other</span></td>
+            <td><div class='report-val'><span id="HhuZI0o47Ti-num" class="report-val count"> 0 </span> <span id="HhuZI0o47Ti-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="gckmtVjewrL-num" class="report-val count"> 0 </span> <span id="gckmtVjewrL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="iIrFBGoEcBD-num" class="report-val count"> 0 </span> <span id="iIrFBGoEcBD-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ygHgaWKewlh-num" class="report-val count"> 0 </span> <span id="ygHgaWKewlh-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="gvTUGyEpsVC-num" class="report-val count"> 0 </span> <span id="gvTUGyEpsVC-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tz5ehjvTl0J-num" class="report-val count"> 0 </span> <span id="tz5ehjvTl0J-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="YHLR6V0mgXy-num" class="report-val count"> 0 </span> <span id="YHLR6V0mgXy-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ghL2E0Gdea2-num" class="report-val count"> 0 </span> <span id="ghL2E0Gdea2-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="AWGkR4Pu1b9-num" class="report-val count"> 0 </span> <span id="AWGkR4Pu1b9-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="CBGbBH7nR5q-num" class="report-val count"> 0 </span> <span id="CBGbBH7nR5q-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr class='sort-fixed'>
+            <td></td>
+            <td><span class='text'>Unknown</span></td>
+            <td><div class='report-val'><span id="Sf4y6jRdCGk-num" class="report-val count"> 0 </span> <span id="Sf4y6jRdCGk-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="BtDH9iJ0aml-num" class="report-val count"> 0 </span> <span id="BtDH9iJ0aml-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="UXUwCEGWWGg-num" class="report-val count"> 0 </span> <span id="UXUwCEGWWGg-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tHSOYVxX33j-num" class="report-val count"> 0 </span> <span id="tHSOYVxX33j-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="cGsaAIAmkNZ-num" class="report-val count"> 0 </span> <span id="cGsaAIAmkNZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="qXo2SRC7Fcq-num" class="report-val count"> 0 </span> <span id="qXo2SRC7Fcq-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="nFl8jy7ig53-num" class="report-val count"> 0 </span> <span id="nFl8jy7ig53-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="SwP3ew4zyKw-num" class="report-val count"> 0 </span> <span id="SwP3ew4zyKw-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="aK1wnxskdLh-num" class="report-val count"> 0 </span> <span id="aK1wnxskdLh-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="yxjeQ52hiWH-num" class="report-val count"> 0 </span> <span id="yxjeQ52hiWH-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr class='sort-fixed'>
+            <td></td>
+            <td><span class='text'>Missing from chart</span></td>
+            <td><div class='report-val'><span id="SJpB9pXW1wv-num" class="report-val count"> 0 </span> <span id="SJpB9pXW1wv-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ZaLgXgL9Zvr-num" class="report-val count"> 0 </span> <span id="ZaLgXgL9Zvr-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="vCpAXSQ81rW-num" class="report-val count"> 0 </span> <span id="vCpAXSQ81rW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="sIPiHphrIjZ-num" class="report-val count"> 0 </span> <span id="sIPiHphrIjZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tUlWKvRWnNF-num" class="report-val count"> 0 </span> <span id="tUlWKvRWnNF-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="VEAgRLCtIEq-num" class="report-val count"> 0 </span> <span id="VEAgRLCtIEq-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="W47O84wqP8W-num" class="report-val count"> 0 </span> <span id="W47O84wqP8W-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="NEMiWAxMwXC-num" class="report-val count"> 0 </span> <span id="NEMiWAxMwXC-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ltXpIy8V9rr-num" class="report-val count"> 0 </span> <span id="ltXpIy8V9rr-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ZAYSRBS6p8V-num" class="report-val count"> 0 </span> <span id="ZAYSRBS6p8V-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+        </tbody>
+        <tbody>
+          <tr class='top-row'>
+            <td><span class='text'>Number of Operating Theatre Encounters</span></td>
+            <td>Mean (Standard Deviation)</td>
+            <td><div class='report-val'><span id="PmQophZvaoO-val" class="report-val count"> 0 </span> <span id="in11dGxIS6F-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="XVL4krhgQ83-val" class="report-val count"> 0 </span> <span id="CWnpBtQm98p-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="eYIOM1rlTLe-val" class="report-val count"> 0 </span> <span id="mW8mt8XHpZU-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="x2e0XVXIpLJ-val" class="report-val count"> 0 </span> <span id="YP0dPyH8U8E-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="J0rsXQOuHi3-val" class="report-val count"> 0 </span> <span id="mYIo43oIx3B-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="dfHw2pmlD61-val" class="report-val count"> 0 </span> <span id="X3sGRDUD74K-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="n7wD5lpMl1A-val" class="report-val count"> 0 </span> <span id="AKVOZzDX4D7-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="ugjLcxjD7cP-val" class="report-val count"> 0 </span> <span id="eG9ZyO8n92Y-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="Cku6582Po1U-val" class="report-val count"> 0 </span> <span id="LGCYEtNg0O2-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="ZuKT1yi5Fvt-val" class="report-val count"> 0 </span> <span id="kH1imJ9oC0n-val" class="report-val sd"> (SD 0) </span></div></td>
+          </tr>
+        </tbody>
+        <tbody>
+          <tr class='top-row'>
+            <td><span class='text'>Length of stay</span></td>
+            <td>Mean (Standard Deviation)</td>
+            <td><div class='report-val'><span id="c9T1BBDuY0r-val" class="report-val count"> 0 </span> <span id="mobvMtmJ3O1-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="uZJ5jNQBIEp-val" class="report-val count"> 0 </span> <span id="Hrjrqb9jlnR-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="UezfAlmGtuz-val" class="report-val count"> 0 </span> <span id="fvmDGGVbvPo-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="HQEdkEayqoV-val" class="report-val count"> 0 </span> <span id="uG2YiC6fDyC-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="B7NV50FR4rw-val" class="report-val count"> 0 </span> <span id="J5GZR0K6vTI-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="SVfDgeXmqT5-val" class="report-val count"> 0 </span> <span id="QiEUj0Hdipi-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="dkH29qs4gYE-val" class="report-val count"> 0 </span> <span id="LW5BATFDt8d-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="phCOYhKe9XY-val" class="report-val count"> 0 </span> <span id="y7O9599Hh3g-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="wp5SX1dTiMW-val" class="report-val count"> 0 </span> <span id="GIAO4VoKCt7-val" class="report-val sd"> (SD 0) </span></div></td>
+            <td><div class='report-val'><span id="h3cGb9efLer-val" class="report-val count"> 0 </span> <span id="e3m27Qmvna3-val" class="report-val sd"> (SD 0) </span></div></td>
+          </tr>
+        </tbody>
+        <tbody id='T1qWJMe9h1w'>
+          <tr class='top-row'><td><span class='text'>Disposition</span></td>
+            <td><span class='text'>Discharged home</span></td>
+            <td><div class='report-val'><span id="TJ9fT4OQPak-num" class="report-val count"> 0 </span> <span id="TJ9fT4OQPak-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="sSz6d8eXvbe-num" class="report-val count"> 0 </span> <span id="sSz6d8eXvbe-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xuLm5kt5PvT-num" class="report-val count"> 0 </span> <span id="xuLm5kt5PvT-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Ih1oGsjntMw-num" class="report-val count"> 0 </span> <span id="Ih1oGsjntMw-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Ch5Rof6gUR2-num" class="report-val count"> 0 </span> <span id="Ch5Rof6gUR2-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="AOdWQwY90Yn-num" class="report-val count"> 0 </span> <span id="AOdWQwY90Yn-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="sJWi8lgP4F9-num" class="report-val count"> 0 </span> <span id="sJWi8lgP4F9-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="B7FRhIDMIKV-num" class="report-val count"> 0 </span> <span id="B7FRhIDMIKV-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="nIN1g1SU7Cs-num" class="report-val count"> 0 </span> <span id="nIN1g1SU7Cs-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="fcUZMQMcLRu-num" class="report-val count"> 0 </span> <span id="fcUZMQMcLRu-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Intensive care unit</span></td>
+            <td><div class='report-val'><span id="tOqVG1vmXpT-num" class="report-val count"> 0 </span> <span id="tOqVG1vmXpT-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="QFXHHBacAEN-num" class="report-val count"> 0 </span> <span id="QFXHHBacAEN-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="paAsbjUiVqC-num" class="report-val count"> 0 </span> <span id="paAsbjUiVqC-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="HSq8YoClOxG-num" class="report-val count"> 0 </span> <span id="HSq8YoClOxG-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="QT0ZjufMFJn-num" class="report-val count"> 0 </span> <span id="QT0ZjufMFJn-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="WJl7k6ZMOcu-num" class="report-val count"> 0 </span> <span id="WJl7k6ZMOcu-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="VYoSnq0ZGTb-num" class="report-val count"> 0 </span> <span id="VYoSnq0ZGTb-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="pkKb3mhmdB1-num" class="report-val count"> 0 </span> <span id="pkKb3mhmdB1-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="i9zhlb40EPW-num" class="report-val count"> 0 </span> <span id="i9zhlb40EPW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="O2l471hHecq-num" class="report-val count"> 0 </span> <span id="O2l471hHecq-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Left against medical advice</span></td>
+            <td><div class='report-val'><span id="NXXlySABgqk-num" class="report-val count"> 0 </span> <span id="NXXlySABgqk-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="T9bAl3JMm1a-num" class="report-val count"> 0 </span> <span id="T9bAl3JMm1a-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ZEcl5TX97Ou-num" class="report-val count"> 0 </span> <span id="ZEcl5TX97Ou-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="PG3MVHzEnhR-num" class="report-val count"> 0 </span> <span id="PG3MVHzEnhR-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="L3C56427P4y-num" class="report-val count"> 0 </span> <span id="L3C56427P4y-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="HlaMAv5jE0q-num" class="report-val count"> 0 </span> <span id="HlaMAv5jE0q-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ty0XQeDSzar-num" class="report-val count"> 0 </span> <span id="ty0XQeDSzar-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dEUOHhQmWFf-num" class="report-val count"> 0 </span> <span id="dEUOHhQmWFf-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="bymEOsMYGO5-num" class="report-val count"> 0 </span> <span id="bymEOsMYGO5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="WpnzTjwVI93-num" class="report-val count"> 0 </span> <span id="WpnzTjwVI93-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Mortuary or died</span></td>
+            <td><div class='report-val'><span id="UvbQKmLfAWH-num" class="report-val count"> 0 </span> <span id="UvbQKmLfAWH-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="FnrcQRI6z10-num" class="report-val count"> 0 </span> <span id="FnrcQRI6z10-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="gL0B8qCffzc-num" class="report-val count"> 0 </span> <span id="gL0B8qCffzc-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="JucsIV4Z86D-num" class="report-val count"> 0 </span> <span id="JucsIV4Z86D-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="kTkHmz4jNBW-num" class="report-val count"> 0 </span> <span id="kTkHmz4jNBW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="cobWBcJXJFC-num" class="report-val count"> 0 </span> <span id="cobWBcJXJFC-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="E1GEk4JvPQW-num" class="report-val count"> 0 </span> <span id="E1GEk4JvPQW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="kVbdEgHJHWv-num" class="report-val count"> 0 </span> <span id="kVbdEgHJHWv-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="WbeyrEe2wAW-num" class="report-val count"> 0 </span> <span id="WbeyrEe2wAW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="AubG5xfoBFC-num" class="report-val count"> 0 </span> <span id="AubG5xfoBFC-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Operating theatre</span></td>
+            <td><div class='report-val'><span id="UMQd2Q2xKCH-num" class="report-val count"> 0 </span> <span id="UMQd2Q2xKCH-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Ox9cpQwLi5a-num" class="report-val count"> 0 </span> <span id="Ox9cpQwLi5a-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="gM1rOMQTC0y-num" class="report-val count"> 0 </span> <span id="gM1rOMQTC0y-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Hko81CJSWcF-num" class="report-val count"> 0 </span> <span id="Hko81CJSWcF-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="W3nPQbXBQYx-num" class="report-val count"> 0 </span> <span id="W3nPQbXBQYx-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="c5IfUCqOROq-num" class="report-val count"> 0 </span> <span id="c5IfUCqOROq-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="cifRDTqRFLM-num" class="report-val count"> 0 </span> <span id="cifRDTqRFLM-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="IBXGdEN8XuQ-num" class="report-val count"> 0 </span> <span id="IBXGdEN8XuQ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="OFPkeXmS2iX-num" class="report-val count"> 0 </span> <span id="OFPkeXmS2iX-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="HpBKkcnCD7o-num" class="report-val count"> 0 </span> <span id="HpBKkcnCD7o-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Rehabilitation centre or nursing facility</span></td>
+            <td><div class='report-val'><span id="PuXbA3xnLQp-num" class="report-val count"> 0 </span> <span id="PuXbA3xnLQp-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="tzyNmgzwnr5-num" class="report-val count"> 0 </span> <span id="tzyNmgzwnr5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="QJ7x0YY5WJv-num" class="report-val count"> 0 </span> <span id="QJ7x0YY5WJv-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="VxcXBl5B5uL-num" class="report-val count"> 0 </span> <span id="VxcXBl5B5uL-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="mBzc8t65Bgp-num" class="report-val count"> 0 </span> <span id="mBzc8t65Bgp-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="fl19i5qxt2z-num" class="report-val count"> 0 </span> <span id="fl19i5qxt2z-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="W58MIoGW2ou-num" class="report-val count"> 0 </span> <span id="W58MIoGW2ou-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="YPWSRCayPbZ-num" class="report-val count"> 0 </span> <span id="YPWSRCayPbZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="LERHiyaBKGq-num" class="report-val count"> 0 </span> <span id="LERHiyaBKGq-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="ZtGk8X9MKKL-num" class="report-val count"> 0 </span> <span id="ZtGk8X9MKKL-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Transferred to another hospital</span></td>
+            <td><div class='report-val'><span id="fzLtpDydKmP-num" class="report-val count"> 0 </span> <span id="fzLtpDydKmP-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="YBU1xYPxaTe-num" class="report-val count"> 0 </span> <span id="YBU1xYPxaTe-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dGM0CZ814lU-num" class="report-val count"> 0 </span> <span id="dGM0CZ814lU-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="AGxqeNgkvpZ-num" class="report-val count"> 0 </span> <span id="AGxqeNgkvpZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Kr3MOj9gqaq-num" class="report-val count"> 0 </span> <span id="Kr3MOj9gqaq-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="yassXMpIz4W-num" class="report-val count"> 0 </span> <span id="yassXMpIz4W-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Kg8aoVspSqF-num" class="report-val count"> 0 </span> <span id="Kg8aoVspSqF-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="UO4YU0noG02-num" class="report-val count"> 0 </span> <span id="UO4YU0noG02-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="pmw5ax3ltB5-num" class="report-val count"> 0 </span> <span id="pmw5ax3ltB5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="qDK0UBRLnjJ-num" class="report-val count"> 0 </span> <span id="qDK0UBRLnjJ-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Ward</span></td>
+            <td><div class='report-val'><span id="sZK0zBLrZ2O-num" class="report-val count"> 0 </span> <span id="sZK0zBLrZ2O-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="EtGde7UyHuU-num" class="report-val count"> 0 </span> <span id="EtGde7UyHuU-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="wlGD0tx0RFo-num" class="report-val count"> 0 </span> <span id="wlGD0tx0RFo-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xBEXIL1IYun-num" class="report-val count"> 0 </span> <span id="xBEXIL1IYun-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="A3NW60YkoOD-num" class="report-val count"> 0 </span> <span id="A3NW60YkoOD-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="vl2O9sR8hnW-num" class="report-val count"> 0 </span> <span id="vl2O9sR8hnW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="LqCaTI4scX1-num" class="report-val count"> 0 </span> <span id="LqCaTI4scX1-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="AIi8BH0Hlix-num" class="report-val count"> 0 </span> <span id="AIi8BH0Hlix-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="x0n2Uy2p2F0-num" class="report-val count"> 0 </span> <span id="x0n2Uy2p2F0-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xBPLwToTELM-num" class="report-val count"> 0 </span> <span id="xBPLwToTELM-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+          <tr class='sort-fixed'>
+            <td></td>
+            <td><span class='text'>Other</span></td>
+            <td><div class='report-val'><span id="ILVcbRxrKQA-num" class="report-val count"> 0 </span> <span id="ILVcbRxrKQA-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="lESeHphvh69-num" class="report-val count"> 0 </span> <span id="lESeHphvh69-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="fDgW4w76TSv-num" class="report-val count"> 0 </span> <span id="fDgW4w76TSv-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dMvfPVlQlGQ-num" class="report-val count"> 0 </span> <span id="dMvfPVlQlGQ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="OihOXdNPaBs-num" class="report-val count"> 0 </span> <span id="OihOXdNPaBs-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="VNLgDYaX9BZ-num" class="report-val count"> 0 </span> <span id="VNLgDYaX9BZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="GVOFJIEHjai-num" class="report-val count"> 0 </span> <span id="GVOFJIEHjai-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="PSygTG8Lf0k-num" class="report-val count"> 0 </span> <span id="PSygTG8Lf0k-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="EFXkezLIpZA-num" class="report-val count"> 0 </span> <span id="EFXkezLIpZA-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="V3SoYjULj8H-num" class="report-val count"> 0 </span> <span id="V3SoYjULj8H-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+          <tr class='sort-fixed'>
+            <td></td>
+            <td><span class='text'>Unknown</span></td>
+            <td><div class='report-val'><span id="Qx2BqJPcRja-num" class="report-val count"> 0 </span> <span id="Qx2BqJPcRja-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="w0UjVRuL5Jf-num" class="report-val count"> 0 </span> <span id="w0UjVRuL5Jf-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="J4xTeth2UtI-num" class="report-val count"> 0 </span> <span id="J4xTeth2UtI-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="z4EAHXChDHZ-num" class="report-val count"> 0 </span> <span id="z4EAHXChDHZ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="zxH13bhxIdo-num" class="report-val count"> 0 </span> <span id="zxH13bhxIdo-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="xMHBiejoTgu-num" class="report-val count"> 0 </span> <span id="xMHBiejoTgu-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Er9kTZ0wPM5-num" class="report-val count"> 0 </span> <span id="Er9kTZ0wPM5-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="EuM5taM2J0H-num" class="report-val count"> 0 </span> <span id="EuM5taM2J0H-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="HLjOU9x7d6Z-num" class="report-val count"> 0 </span> <span id="HLjOU9x7d6Z-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="B936KqUr74n-num" class="report-val count"> 0 </span> <span id="B936KqUr74n-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+          <tr class='sort-fixed'>
+            <td></td>
+            <td><span class='text'>Missing from chart</span></td>
+            <td><div class='report-val'><span id="jXMA5MwUnQE-num" class="report-val count"> 0 </span> <span id="jXMA5MwUnQE-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="z2xQ3mCoksr-num" class="report-val count"> 0 </span> <span id="z2xQ3mCoksr-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="wKABX0DFeeQ-num" class="report-val count"> 0 </span> <span id="wKABX0DFeeQ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="DDttW3OKzFg-num" class="report-val count"> 0 </span> <span id="DDttW3OKzFg-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="aY8hQkHTcPQ-num" class="report-val count"> 0 </span> <span id="aY8hQkHTcPQ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="piw2HJ4HLjR-num" class="report-val count"> 0 </span> <span id="piw2HJ4HLjR-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="HdJU3eMUfc6-num" class="report-val count"> 0 </span> <span id="HdJU3eMUfc6-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="Gow7as5iJga-num" class="report-val count"> 0 </span> <span id="Gow7as5iJga-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="JD2LSuP00Ht-num" class="report-val count"> 0 </span> <span id="JD2LSuP00Ht-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="MVv9Mj32aaP-num" class="report-val count"> 0 </span> <span id="MVv9Mj32aaP-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+        </tbody>
+        <tbody>
+          <tr class='top-row'><td><span class='text'>Mortality</span></td>
+            <td><span class='text'>Mortality Inpatient</span></td>
+            <td><div class='report-val'><span id="rOqN47L1QUo-num" class="report-val count"> 0 </span> <span id="rOqN47L1QUo-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="t6XXlGaWjAJ-num" class="report-val count"> 0 </span> <span id="t6XXlGaWjAJ-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="px0rxTyYH7z-num" class="report-val count"> 0 </span> <span id="px0rxTyYH7z-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="gJANfuLQQFa-num" class="report-val count"> 0 </span> <span id="gJANfuLQQFa-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="QLHgNesypxA-num" class="report-val count"> 0 </span> <span id="QLHgNesypxA-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="bQlgCAvEY6c-num" class="report-val count"> 0 </span> <span id="bQlgCAvEY6c-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="RWqfKVXV5w8-num" class="report-val count"> 0 </span> <span id="RWqfKVXV5w8-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="otqyP04V6Ru-num" class="report-val count"> 0 </span> <span id="otqyP04V6Ru-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="XLFzvHiFUKg-num" class="report-val count"> 0 </span> <span id="XLFzvHiFUKg-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="wLEP8Ujtnzb-num" class="report-val count"> 0 </span> <span id="wLEP8Ujtnzb-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+
+          <tr>
+            <td></td>
+            <td><span class='text'>Mortality Total</span></td>
+            <td><div class='report-val'><span id="e2DXLJI62a7-num" class="report-val count"> 0 </span> <span id="e2DXLJI62a7-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="dUv5HYlKdh7-num" class="report-val count"> 0 </span> <span id="dUv5HYlKdh7-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="GFyfm9WoMrT-num" class="report-val count"> 0 </span> <span id="GFyfm9WoMrT-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="mIlDFg6Nizs-num" class="report-val count"> 0 </span> <span id="mIlDFg6Nizs-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="EXJbZ9BxuXU-num" class="report-val count"> 0 </span> <span id="EXJbZ9BxuXU-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="U7rAfv8Dfkw-num" class="report-val count"> 0 </span> <span id="U7rAfv8Dfkw-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="sBJcc1gFlrW-num" class="report-val count"> 0 </span> <span id="sBJcc1gFlrW-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="j5QSXEneaZ9-num" class="report-val count"> 0 </span> <span id="j5QSXEneaZ9-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="pmg11iQsTrt-num" class="report-val count"> 0 </span> <span id="pmg11iQsTrt-val" class="report-val pct"> (0.0%) </span></div></td>
+            <td><div class='report-val'><span id="bQDxieycHWi-num" class="report-val count"></span> <span id="bQDxieycHWi-val" class="report-val pct"> (0.0%) </span></div></td>
+          </tr>
+        </tbody>
+
+
+      </table>
+      <div>
+        *Percentages are displayed as percent of specific age group aggregations divided by the total registry cases for that age group during the period.
+        It is possible for some values to be entered multiple times for a single patient (i.e. Injury Mechanism, Injury Type, etc), so percentages may have a
+        sum total greater than 100% due to some patients being counted multiple times for different conditions.
+      </div>
+
+    </div>
+
+
+  </div>
+</div>
+

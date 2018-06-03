@@ -1,0 +1,272 @@
+<!-- // Written by EpiTech Consultants
+// 2018-03-01
+// accounts@epitechconsultants.org
+// aaron@epitechconsultants.org
+// Functions below the main script
+              
+
+               -->
+<style>
+table
+{
+    font:15px Verdana;
+    width:100%;
+}
+report-body.table, report-info.table{
+  margin:10px 0;
+  padding:2px 4px;
+}
+report-body.table {
+  border:solid 1px #333;
+
+}
+report-body.td {
+  width: 25%
+}
+table.th {
+    font-weight:bold;
+}
+</style>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+<div class='container'>
+  <div id='report' class='panel panel-primary' style="padding: 1%">
+    <div id='reportHead' class='panel-head'>
+      <div id='subtitles'>
+        <table id='report-info' class='report-info'>
+          <tr>
+            <th>
+              <h1 id='title'><b>Audit Filter Title</b></h1>
+            </th>
+          </tr>
+        </table>
+        <table id='report-sub-info' class='report-info'>
+          <tr>
+            <td>Audit definition:</td><td><div id='definition'></div></td>
+            <td><a id='download' class='btn btn-sm' onclick="exportTableToCSV('audit_report.csv')" target='_blank'>Export to CSV</a></td>
+          </tr>
+          <tr>
+            <td>Organisation Unit:</td>
+            <td><div id='organisationUnit'></div></td>
+          </tr>
+          <tr>
+            <td>Report Quarter:</td>
+            <td><div id='quarter'></div></td>
+          </tr>
+          <tr>
+            <td>Record Count:</td>
+            <td><div id='recordCount'></div></td>
+          <tr>
+            <td>Generated on:</td><td><div id='genDate'></div></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    <div id="showData" class='panel-body'>
+    </div>
+  </div>
+</div>
+<script>
+
+  // Written by EpiTech Consultants
+  // 2018-02-04
+  // accounts@epitechconsultants.org
+  // aaron@epitechconsultants.org
+  // Functions below the main script
+              
+
+              
+  var report_name = 'Emergency Unit Mortality'
+  var definition = 'EU Disposition = Mortuary or Died'
+  // -----------------------------------------------------
+  // Display CaseID if EUDispo = Mortuary or Died OR HospitalDispo = Morgue or Died
+  //
+  console.log(report_name)
+  // pull some things out of the main dhis2 window
+  var date = dhis2.report.date;
+  var orgUnit = dhis2.report.organisationUnit;
+  // This is a quarterly report, so find the right quarter
+  var period=date.substring(0,4)+"Q" + Math.ceil(Number(String(date.substring(5,7)))/3);
+
+  // Mortality Dispositions, both from EU and Inpatient
+  var eu_r = $.get(event_query_uri(orgUnit, period, "&dimension=ijG1c7IqeZb:IN:7&dimension=AAkZm4ZxFw7&stage=lNmErUNhmC0"));
+
+  $.when(eu_r).done(function(eu) {
+    eu = [eu]
+    // get the register id column
+    var eu_mort_ids = strip_col_val(eu, 'AAkZm4ZxFw7')
+
+    // Unique ids
+    report_matched(eu_mort_ids, "EU Mortality IDs: ")
+
+    matched_ids = eu_mort_ids
+    report_matched(matched_ids, 'Filtered Matched: ')
+
+    // Update the actual doc we're viewing
+
+// Update the actual doc we're viewing
+  document.getElementById('title').innerText = report_name;
+  document.getElementById('definition').innerText =  definition;
+  document.getElementById('organisationUnit').innerText = orgUnit['name'];
+  document.getElementById('quarter').innerText = period;
+  document.getElementById('genDate').innerText =  Date();
+  document.getElementById('recordCount').innerText =  matched_ids.length;
+
+  CreateTableFromJSON(matched_ids)
+})
+
+function report_matched(id_array, text) {
+  console.log(text + String(id_array.length))
+}
+
+function downloadCSV(csv, filename) {
+    var csvFile;
+    var downloadLink;
+
+    // CSV file
+    csvFile = new Blob([csv], {type: "text/csv"});
+
+    // Download link
+    downloadLink = document.createElement("a");
+
+    // File name
+    downloadLink.download = filename;
+
+    // Create a link to the file
+    downloadLink.href = window.URL.createObjectURL(csvFile);
+
+    // Hide download link
+    downloadLink.style.display = "none";
+
+    // Add the link to DOM
+    document.body.appendChild(downloadLink);
+
+    // Click download link
+    downloadLink.click();
+}
+
+function exportTableToCSV(filename) {
+    var csv = [];
+    var rows = document.querySelectorAll("table tr");
+
+    for (var i = 0; i < rows.length; i++) {
+        var row = [], cols = rows[i].querySelectorAll("td, th");
+
+        for (var j = 0; j < cols.length; j++)
+          if (cols[j].innerHTML.indexOf('btn') == -1) {
+            row.push(cols[j].innerText);
+
+          }
+
+        csv.push(row.join(","));
+    }
+
+    // Download CSV file
+    downloadCSV(csv.join("\n"), filename);
+}
+
+
+function event_query_uri(orgUnit, period, query_specific_string) {
+uri = "../api/26/analytics/events/query/YGa3BmrwwiU.json?dimension=pe:" + period + "&dimension=ou:" + orgUnit["id"] + query_specific_string
+return(uri)
+}
+
+function find_col_ind(resp, col_id) {
+// col_id is the internal DHIS2 id value for whatever
+// we want to look for
+var col = -1;
+var h = resp[0].headers;
+// find the eu procedure ids. this really should be a function...
+// get the register id column (it's most likely the last one)
+for (var i = 0; i < h.length; i++) {
+  if (h[i]['name'] == col_id) {
+    var col = i;
+  }
+}
+return col;
+}
+function strip_col_val(resp, col_id) {
+// strip out that value per row
+
+var col_ind = find_col_ind(resp, col_id)
+
+var vals = []
+rows = resp[0].rows
+for (var i = 0; i < rows.length; i++) {
+  vals.push(rows[i][col_ind])
+}
+return vals;
+}
+
+function filter_array(array1, array2) {
+// Filter array a to ignore values
+// from array b
+var res = array1.filter(f => !array2.includes(f));
+return res;
+
+}
+
+function intersect_arrays(a, b) {
+  // requires that values be the same type
+  // https://stackoverflow.com/questions/12433604/how-can-i-find-matching-values-in-two-arrays
+  var sorted_a = a.concat().sort();
+  var sorted_b = b.concat().sort();
+  var common = [];
+  var a_i = 0;
+  var b_i = 0;
+
+  while (a_i < a.length
+         && b_i < b.length)
+  {
+      if (sorted_a[a_i] === sorted_b[b_i]) {
+          common.push(sorted_a[a_i]);
+          a_i++;
+          b_i++;
+      }
+      else if(sorted_a[a_i] < sorted_b[b_i]) {
+          a_i++;
+      }
+      else {
+          b_i++;
+      }
+  }
+  return common;
+}
+
+function CreateTableFromJSON(ids) {
+  var col = ['Register ID'];
+// CREATE DYNAMIC TABLE.
+var table = document.createElement('table');
+table.setAttribute('class', 'table-condensed table-bordered table-striped')
+
+// CREATE HTML TABLE HEADER ROW USING THE EXTRACTED HEADERS ABOVE.
+var tr = table.insertRow(-1);                   // TABLE ROW.
+for (var i = 0; i < col.length; i++) {
+var th = document.createElement('th');      // TABLE HEADER.
+th.innerHTML = col[i];
+tr.appendChild(th);
+}
+
+// ADD JSON DATA TO THE TABLE AS ROWS.
+for (var i = 0; i < ids.length; i++) {
+
+tr = table.insertRow(-1);
+// this isn't entirely necessary right now.
+      for (var j = 0; j < col.length; j++) {
+          var tabCell = tr.insertCell(-1);
+          tabCell.innerHTML = ids[i];
+
+
+      }
+  }
+
+  // FINALLY ADD THE NEWLY CREATED TABLE WITH JSON DATA TO A CONTAINER.
+  var divContainer = document.getElementById('showData');
+  divContainer.innerHTML = '';
+  divContainer.appendChild(table);
+}
+
+
+</script>
+
+
