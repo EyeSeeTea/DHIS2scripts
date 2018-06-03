@@ -3,7 +3,7 @@
 // accounts@epitechconsultants.org
 // aaron@epitechconsultants.org
 // Functions below the main script
-              
+
 
                -->
 <style>
@@ -73,9 +73,9 @@ table.th {
   // accounts@epitechconsultants.org
   // aaron@epitechconsultants.org
   // Functions below the main script
-              
 
-              
+
+
   var report_name = 'Mental status-dependent airway maneuver'
   var definition = 'GCS total < 8 OR AVPU=(P OR U) AND EU Procedures <U+2260> Endotracheal intubation, Surgical airway, OR Assisted Ventilation'
   // -----------------------------------------------------
@@ -88,7 +88,7 @@ table.th {
   // This is a quarterly report, so find the right quarter
   var period=date.substring(0,4)+"Q" + Math.ceil(Number(String(date.substring(5,7)))/3);
 
-  var eu_r = $.get(event_query_uri(orgUnit, period, "&dimension=AAkZm4ZxFw7&dimension=AlkbwOe8hCK:IN:2;3;5&stage=NliaouB66pN"));
+  var eu_r = $.get(event_query_uri(orgUnit, period, "&dimension=AAkZm4ZxFw7&dimension=AlkbwOe8hCK:IN:3;4;6;7&stage=NliaouB66pN"));
   var gcs_r = $.get(event_query_uri(orgUnit, period, "&dimension=WJE7ozQ21LA&dimension=kj3SOKykiDg&dimension=AAkZm4ZxFw7&stage=f5JCFeFc6fM"))
   $.when(gcs_r, eu_r).done(function(gcs_avpu, eu_procedures) {
 
@@ -285,5 +285,3 @@ tr = table.insertRow(-1);
 
 
 </script>
-
-
