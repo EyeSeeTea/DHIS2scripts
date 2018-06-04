@@ -41,4 +41,24 @@ Most of the program rules are stand alone and can fire whenever necessary.  Ther
 ## Analytics
 
 ### Program Indicators
-The program indicators form the foundation for almost all of the analysis objects within the ETA program.  
+
+#### General Indicators
+The program indicators form the foundation for almost all of the analysis objects within the ETA program.  Because Tracker does not allow for category option disaggregations on individual data elements, we had to make program indicators with age filters to match the age buckets specified.  
+
+The name format is `dataElement name` - `optionSet value` `age bucket`.  If you inspect the expressions, you'll see a format of `dataElement` == `optionSet value` && `age` == `agebucket`.  They all follow the same format.  Injury mechanism combines two data elements together and stitches them together with an || before the age filter.
+
+#### Severity Scores
+The other main type of indicator is for severity scores.  In general, these follow a formula specified by the scoring system.  See the metadata worksheet for links to the formulas.
+
+### Aggregate Indicators
+The aggregate indicators use program indicators as inputs.  The `... Patient Count` indicators use a program indicator in the numerator and 1 for a denominator.  The `... Patient %` indicators use the related program indicator in the numerator and the related total program enrollment for that age group in the denominator.  The main reason these exist is to make it easier for a user to find information in one place instead of having to know that some data are stored in data elements, some in program indicators, and some in regular indicators.  It also makes it easier for the severity score and patient characteristics reports to pull information just using indicator groups instead of individual indicator references in the query.
+
+### Custom Reports
+The custom reports are in the `custom_reports` folder.  Most of these are "audit filters" which narrow down patients to just those with a specific criteria for manual chart review.  The reports use a jQuery get request (or requests) to the analytics and events endpoints to get the list of patients.  The results are either combined or intersected and the final patched patient registry ids are displayed in a table for the report.  
+
+All of the javascript is embedded in the report itself so it is self contained provided the metadata has been configured with the same ids.  The only external dependency is bootstrap for some of the formatting on the table.
+
+## Areas for Improvement
+UI/UX- The program rules are messy.  When we started, we didn't anticipate so many flow control type logic rules on the entry form itself.  If the form continues to require additional display logic, it might be better to scrap the program rules and build a custom entry form to handle the logic in a better fashion.  The underlying stage structure will still allow for a one patient to many interaction setup and a custom form could have _all_ of the flow control desired instead of most.  
+
+Custom reports- I'm more of a Python/R programmer than javascript, so the custom reports could be optimized.  Specifically, the patient characteristics could be reprogrammed to be entirely laid out with javascript code instead of having a base html structure already laid out.  That would allow the form to update if new indicators are added to one of the relevant indicator groups. 
