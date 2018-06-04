@@ -3,11 +3,11 @@ The WHO ETA program is built to use all vanilla DHIS2 modules and does not rely 
 
 ## Naming conventions
 * `ETA_`
- * dataElements
+  * dataElements
 * `ETA `
- * optionSets
- * programIndicators
- * indicators (aggregate)
+  * optionSets
+  * programIndicators
+  * indicators (aggregate)
 
 ## Structure and Data Entry
 The ETA program is structured in a series of stages using Tracker Capture.  The stages allow for a "tabular" interface for the user to toggle between sections of the form for data entry as well as support one to many relationships for some repeat sections such as medical interventions.
